@@ -29,6 +29,10 @@ func (db *DB) Close() {
 	db.pool.Close()
 }
 
+func (db *DB) Ping(ctx context.Context) error {
+	return db.pool.Ping(ctx)
+}
+
 func (db *DB) Pool() *pgxpool.Pool {
 	return db.pool
 }

@@ -54,6 +54,21 @@ func main() {
 	wsHandler := wshandler.NewHandler(svc, jwtManager, hub, wshandler.Config{}, logger)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := db.Ping(pingCtx); err != nil {
+			logger.Error("health check failed", "err", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("unavailable"))
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 	mux.Handle("GET /ws", wsHandler)
 	mux.Handle("/", httphandler.NewMux(svc, jwtManager))
 
