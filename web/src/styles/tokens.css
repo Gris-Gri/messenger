@@ -1,0 +1,19 @@
+:root {
+  --bg-primary: #15161c;
+  --bg-sidebar: #1b1d24;
+  --bg-elevated: #22242d;
+  --border: #2c2f3a;
+  --text-primary: #e7e8ed;
+  --text-secondary: #8a8d9a;
+  --accent: #6e5bff;
+  --online: #3dd68c;
+
+  --font-heading: 'Manrope', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --sidebar-width: 320px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}

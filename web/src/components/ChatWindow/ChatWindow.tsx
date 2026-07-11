@@ -1,0 +1,298 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { getChatDisplayName } from '../../api/chats'
+import { useActiveChat } from '../../context/ActiveChatContext'
+import { useAuth } from '../../context/AuthContext'
+import { useSidebar } from '../../context/SidebarContext'
+import { useChats } from '../../hooks/useChats'
+import { useMemberNames } from '../../hooks/useMemberNames'
+import { useMessages } from '../../hooks/useMessages'
+import { useWebSocket } from '../../hooks/useWebSocket'
+import { MembersPanel } from '../MembersPanel/MembersPanel'
+import { SearchPanel } from '../SearchPanel/SearchPanel'
+import { formatMessageTime } from '../../utils/formatMessageTime'
+import styles from './ChatWindow.module.css'
+
+type ChatWindowProps = {
+  chatId: number | null
+  chatTitle: string | null
+  chatType: 'direct' | 'group' | null
+}
+
+function resolveSenderName(
+  senderId: number,
+  chatType: 'direct' | 'group' | null,
+  currentUserId: number | null,
+  memberNames: Record<number, string>,
+): string | undefined {
+  if (chatType !== 'group' || currentUserId === senderId) {
+    return undefined
+  }
+
+  return memberNames[senderId]
+}
+
+function resizeTextarea(element: HTMLTextAreaElement): void {
+  element.style.height = 'auto'
+  element.style.height = `${Math.min(element.scrollHeight, 120)}px`
+}
+
+export function ChatWindow({ chatId, chatTitle, chatType }: ChatWindowProps) {
+  const { currentUser } = useAuth()
+  const { isNarrow, toggleSidebar } = useSidebar()
+  const { sendMessage, registerChatHandlers } = useWebSocket()
+  const {
+    messages,
+    loading,
+    loadingMore,
+    error,
+    listRef,
+    handleScroll,
+    messageKey,
+    scrollToMessage,
+    highlightedMessageId,
+  } = useMessages(chatId, registerChatHandlers)
+  const memberNames = useMemberNames(chatId, chatType, currentUser)
+  const [draft, setDraft] = useState('')
+  const [membersOpen, setMembersOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const headerTitle = chatTitle ?? 'Выберите чат'
+  const canSend = chatId !== null && draft.trim().length > 0
+
+  useEffect(() => {
+    setMembersOpen(false)
+    setSearchOpen(false)
+  }, [chatId])
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      resizeTextarea(textarea)
+    }
+  }, [draft, chatId])
+
+  const openMembers = useCallback(() => {
+    setSearchOpen(false)
+    setMembersOpen(true)
+  }, [])
+
+  const handleSearchSelect = useCallback(
+    async (messageId: number) => {
+      const ok = await scrollToMessage(messageId)
+      if (!ok) {
+        // scrollToMessage sets error in useMessages when load fails
+      }
+    },
+    [scrollToMessage],
+  )
+
+  const handleSend = useCallback(() => {
+    if (chatId === null || !draft.trim()) {
+      return
+    }
+
+    sendMessage(chatId, draft)
+    setDraft('')
+    const textarea = textareaRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+    }
+  }, [chatId, draft, sendMessage])
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        handleSend()
+      }
+    },
+    [handleSend],
+  )
+
+  return (
+    <section className={styles.chatWindow}>
+      <header className={styles.header}>
+        {isNarrow && (
+          <button
+            type="button"
+            className={styles.menuBtn}
+            aria-label="Список чатов"
+            onClick={toggleSidebar}
+          >
+            ☰
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.headerTitleBtn}
+          onClick={chatId !== null ? openMembers : undefined}
+          disabled={chatId === null}
+        >
+          <h1 className={styles.headerTitle}>{headerTitle}</h1>
+        </button>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={`${styles.headerBtn} ${searchOpen ? styles.headerBtnActive : ''}`}
+            aria-label="Поиск по чату"
+            disabled={chatId === null}
+            onClick={() => {
+              setMembersOpen(false)
+              setSearchOpen((open) => !open)
+            }}
+          >
+            ⌕
+          </button>
+          <button
+            type="button"
+            className={styles.headerBtn}
+            aria-label="Участники"
+            disabled={chatId === null}
+            onClick={openMembers}
+          >
+            👥
+          </button>
+          <button
+            type="button"
+            className={styles.headerBtn}
+            aria-label="Информация"
+            disabled={chatId === null}
+            onClick={openMembers}
+          >
+            i
+          </button>
+        </div>
+      </header>
+
+      {chatId === null ? (
+        <div className={styles.emptyState}>Выберите чат в списке слева</div>
+      ) : (
+        <>
+          {searchOpen && (
+            <SearchPanel
+              chatId={chatId}
+              memberNames={memberNames}
+              onClose={() => setSearchOpen(false)}
+              onSelectMessage={handleSearchSelect}
+            />
+          )}
+
+          {error && <div className={styles.errorBanner}>{error}</div>}
+
+          <div className={styles.feedArea}>
+            <ul
+              ref={listRef}
+              className={styles.messageList}
+              onScroll={handleScroll}
+            >
+              {loadingMore && (
+                <li className={styles.loadMoreHint}>Загрузка…</li>
+              )}
+              {loading && messages.length === 0 && (
+                <li className={styles.stateMessage}>Загрузка сообщений…</li>
+              )}
+              {!loading && !error && messages.length === 0 && (
+                <li className={styles.stateMessage}>Нет сообщений</li>
+              )}
+              {messages.map((msg) => {
+                const isOwn = currentUser?.id === msg.sender_id
+                const senderName = resolveSenderName(
+                  msg.sender_id,
+                  chatType,
+                  currentUser?.id ?? null,
+                  memberNames,
+                )
+                const showDelivery = isOwn && msg.delivery_status
+                const isHighlighted = msg.id > 0 && msg.id === highlightedMessageId
+
+                return (
+                  <li
+                    key={messageKey(msg)}
+                    data-message-id={msg.id > 0 ? msg.id : undefined}
+                    className={`${styles.bubbleWrap} ${isOwn ? styles.bubbleWrapOwn : styles.bubbleWrapOther} ${isHighlighted ? styles.bubbleWrapHighlight : ''}`}
+                  >
+                  {!isOwn && senderName && (
+                    <span className={styles.senderName}>{senderName}</span>
+                  )}
+                  <div
+                    className={`${styles.bubble} ${isOwn ? styles.bubbleOwn : styles.bubbleOther}`}
+                  >
+                    {msg.body}
+                  </div>
+                  <div className={styles.meta}>
+                    <span className={styles.timestamp}>
+                      {formatMessageTime(msg.created_at)}
+                    </span>
+                    {showDelivery && (
+                      <span
+                        className={`${styles.delivery} ${msg.delivery_status === 'acked' ? styles.deliveryAck : ''}`}
+                        aria-label={
+                          msg.delivery_status === 'acked'
+                            ? 'Доставлено на сервер'
+                            : 'Ожидает подтверждения'
+                        }
+                      >
+                        {msg.delivery_status === 'acked' ? '◐' : '◌'}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+            </ul>
+
+            <MembersPanel
+              chatId={chatId}
+              open={membersOpen}
+              onClose={() => setMembersOpen(false)}
+            />
+          </div>
+        </>
+      )}
+
+      <div className={styles.inputArea}>
+        <textarea
+          ref={textareaRef}
+          className={styles.textarea}
+          rows={1}
+          placeholder="Сообщение…"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            resizeTextarea(e.currentTarget)
+          }}
+          onKeyDown={handleKeyDown}
+          disabled={chatId === null}
+        />
+        <button
+          type="button"
+          className={styles.sendBtn}
+          disabled={!canSend}
+          aria-label="Отправить"
+          onClick={handleSend}
+        >
+          ➤
+        </button>
+      </div>
+    </section>
+  )
+}
+
+export function ConnectedChatWindow() {
+  const { chats, peerNames } = useChats()
+  const { activeChatId } = useActiveChat()
+
+  const activeChat = useMemo(
+    () => chats.find((chat) => chat.id === activeChatId) ?? null,
+    [activeChatId, chats],
+  )
+
+  return (
+    <ChatWindow
+      chatId={activeChat?.id ?? null}
+      chatTitle={activeChat ? getChatDisplayName(activeChat, peerNames) : null}
+      chatType={activeChat?.type ?? null}
+    />
+  )
+}

@@ -1,0 +1,44 @@
+.layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg-primary) 55%, transparent);
+  border: none;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    position: relative;
+  }
+}
+
+.devSwitch {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  z-index: 100;
+}
+
+.devSwitch:hover {
+  color: var(--text-primary);
+}
