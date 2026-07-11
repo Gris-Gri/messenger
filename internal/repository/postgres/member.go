@@ -66,4 +66,33 @@ func (r *MemberRepository) Get(ctx context.Context, chatID, userID int64) (*doma
 	return &member, nil
 }
 
+func (r *MemberRepository) ListUserIDs(ctx context.Context, chatID int64) ([]int64, error) {
+	const q = `
+		SELECT user_id
+		FROM chat_members
+		WHERE chat_id = $1
+		ORDER BY user_id
+	`
+
+	rows, err := r.db.pool.Query(ctx, q, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("postgres: scan member user_id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: %w", err)
+	}
+
+	return ids, nil
+}
+
 var _ domain.MemberRepository = (*MemberRepository)(nil)

@@ -36,6 +36,14 @@ func (s *Service) RemoveMember(ctx context.Context, callerID, chatID, userID int
 	return s.members.Remove(ctx, chatID, userID)
 }
 
+func (s *Service) ListChatMemberUserIDs(ctx context.Context, chatID, callerID int64) ([]int64, error) {
+	if err := s.ensureChatMember(ctx, chatID, callerID); err != nil {
+		return nil, err
+	}
+
+	return s.members.ListUserIDs(ctx, chatID)
+}
+
 func (s *Service) ensureGroupChatAdmin(ctx context.Context, chatID, userID int64) error {
 	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {

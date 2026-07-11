@@ -18,6 +18,11 @@
   /repository
     /postgres        — реализация репозиториев на pgx
   /service           — бизнес-логика (auth, chat, message, member, search)
+  /handler
+    /http            — REST-хендлеры, middleware JWT, маппинг ошибок
+    /ws              — WebSocket-хендлер, hub для realtime-доставки
+/cmd
+  /server            — main.go, DI и graceful shutdown
 /pkg
   /password          — Argon2id-хэширование паролей
   /jwt               — выпуск и проверка access/refresh JWT
@@ -50,10 +55,68 @@ migrate -path migrations -database "$DATABASE_URL" up
 go test ./...
 ```
 
-### 4. Сборка
+### 4. Сборка и запуск
+
+```bash
+go build -o bin/server ./cmd/server
+# задайте переменные из .env.example
+./bin/server
+```
 
 ```bash
 go build ./...
+```
+
+## Формат ошибок API
+
+Все REST-ручки при ошибке возвращают JSON единого вида:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Неверные данные"
+  }
+}
+```
+
+| HTTP | `error.code` | Когда |
+|---|---|---|
+| 400 | `validation_error` | Невалидный JSON/параметры |
+| 401 | `unauthorized` | Нет или невалидный access/refresh token |
+| 401 | `invalid_credentials` | Неверный login/password при `/login` |
+| 403 | `forbidden` | Нет прав (не участник чата, не admin) |
+| 404 | `not_found` | Сущность не найдена |
+| 409 | `conflict` | Конфликт (дубликат login, участник уже в чате) |
+| 500 | `internal_error` | Неожиданная ошибка сервера |
+
+## Handler layer (Этап 4)
+
+### REST (`internal/handler/http/`)
+
+| Ручка | Хендлер |
+|---|---|
+| `POST /register` | `Register` |
+| `POST /login` | `Login` |
+| `POST /refresh` | `Refresh` (Bearer refresh token) |
+| `GET /chats` | `ListChats` |
+| `POST /chats` | `CreateChat` (`type`: `direct` \| `group`) |
+| `GET /chats/{id}/messages` | `ListMessages` (`before_id`, `limit`) |
+| `POST /chats/{id}/members` | `AddMember` |
+| `DELETE /chats/{id}/members/{user_id}` | `RemoveMember` |
+| `GET /chats/{id}/search` | `SearchMessages` (`q`) |
+
+JWT-middleware (`Auth`) защищает все ручки, кроме `/register`, `/login`, `/refresh`.
+
+### WebSocket (`internal/handler/ws/`)
+
+- `GET /ws` — первый фрейм `{"token":"<access_token>"}`, таймаут аутентификации 5 с
+- `send_message` → синхронный `ack` с `server_id` после записи в БД
+- `new_message` — push онлайн-участникам чата через `Hub`
+- Graceful shutdown закрывает hub и активные соединения
+
+```bash
+go test ./internal/handler/...
 ```
 
 ## Repository layer (Этап 2)
