@@ -301,6 +301,81 @@ func TestSearchValidationError(t *testing.T) {
 	assertErrorCode(t, data, "validation_error")
 }
 
+func TestSearchUsersHappyPath(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	env.users.searchByLoginFn = func(_ context.Context, query string, excludeUserID int64, limit int) ([]domain.User, error) {
+		if query != "ali" {
+			t.Fatalf("query = %q, want ali", query)
+		}
+		if excludeUserID != 1 {
+			t.Fatalf("excludeUserID = %d, want 1", excludeUserID)
+		}
+		if limit != 20 {
+			t.Fatalf("limit = %d, want 20", limit)
+		}
+		return []domain.User{{ID: 2, Login: "alice"}}, nil
+	}
+
+	resp, data := env.do(http.MethodGet, "/users/search?login=ali", nil, env.accessToken(t, 1))
+	assertStatus(t, resp, http.StatusOK)
+
+	var got []struct {
+		ID    int64  `json:"id"`
+		Login string `json:"login"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != 2 || got[0].Login != "alice" {
+		t.Fatalf("unexpected response: %+v", got)
+	}
+}
+
+func TestSearchUsersExcludesCaller(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	env.users.searchByLoginFn = func(_ context.Context, _ string, excludeUserID int64, _ int) ([]domain.User, error) {
+		if excludeUserID != 42 {
+			t.Fatalf("excludeUserID = %d, want 42", excludeUserID)
+		}
+		// Repository must not return the caller; mock mirrors that contract.
+		return []domain.User{{ID: 7, Login: "bobbie"}}, nil
+	}
+
+	resp, data := env.do(http.MethodGet, "/users/search?login=bo", nil, env.accessToken(t, 42))
+	assertStatus(t, resp, http.StatusOK)
+
+	var got []struct {
+		ID    int64  `json:"id"`
+		Login string `json:"login"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, u := range got {
+		if u.ID == 42 {
+			t.Fatalf("caller id %d present in results: %+v", 42, got)
+		}
+	}
+	if len(got) != 1 || got[0].Login != "bobbie" {
+		t.Fatalf("unexpected response: %+v", got)
+	}
+}
+
+func TestSearchUsersShortQuery(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	env.users.searchByLoginFn = func(context.Context, string, int64, int) ([]domain.User, error) {
+		t.Fatal("SearchByLogin must not be called for short query")
+		return nil, nil
+	}
+
+	resp, data := env.do(http.MethodGet, "/users/search?login=a", nil, env.accessToken(t, 1))
+	assertStatus(t, resp, http.StatusBadRequest)
+	assertErrorCode(t, data, "validation_error")
+}
+
 func passwordHash(raw string) (string, error) {
 	return password.Hash(raw)
 }

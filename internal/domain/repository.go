@@ -6,6 +6,7 @@ type UserRepository interface {
 	Create(ctx context.Context, login, passwordHash string) (*User, error)
 	GetByLogin(ctx context.Context, login string) (*User, error)
 	GetByID(ctx context.Context, id int64) (*User, error)
+	SearchByLogin(ctx context.Context, query string, excludeUserID int64, limit int) ([]User, error)
 }
 
 type ChatRepository interface {

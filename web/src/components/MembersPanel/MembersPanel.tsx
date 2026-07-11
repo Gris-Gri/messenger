@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useChatMembers } from '../../hooks/useChatMembers'
+import type { User } from '../../types/domain'
+import { UserSearch } from '../UserSearch/UserSearch'
 import styles from './MembersPanel.module.css'
 
 type MembersPanelProps = {
@@ -21,24 +23,18 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
     addMember,
     removeMember,
   } = useChatMembers(chatId, currentUser?.id ?? null, open)
-  const [userIdInput, setUserIdInput] = useState('')
+
+  const excludeUserIds = useMemo(
+    () => members.map((member) => member.user_id),
+    [members],
+  )
 
   if (!open) {
     return null
   }
 
-  const handleAdd = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-
-    const userId = Number.parseInt(userIdInput.trim(), 10)
-    if (!Number.isFinite(userId) || userId <= 0) {
-      return
-    }
-
-    const ok = await addMember(userId)
-    if (ok) {
-      setUserIdInput('')
-    }
+  const handleSelectUser = async (user: User) => {
+    await addMember(user.id)
   }
 
   const bannerError = actionError ?? error
@@ -60,24 +56,15 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
       {bannerError && <div className={styles.errorBanner}>{bannerError}</div>}
 
       {isAdmin && (
-        <form className={styles.addForm} onSubmit={(event) => void handleAdd(event)}>
-          <input
-            className={styles.addInput}
-            type="text"
-            inputMode="numeric"
-            placeholder="user_id"
-            value={userIdInput}
-            onChange={(event) => setUserIdInput(event.target.value)}
+        <div className={styles.addSection}>
+          <p className={styles.addHint}>Добавить по логину</p>
+          <UserSearch
+            placeholder="Логин…"
             disabled={actionLoading}
+            excludeUserIds={excludeUserIds}
+            onSelect={handleSelectUser}
           />
-          <button
-            type="submit"
-            className={styles.addBtn}
-            disabled={actionLoading || !userIdInput.trim()}
-          >
-            Добавить
-          </button>
-        </form>
+        </div>
       )}
 
       <ul className={styles.memberList}>

@@ -55,42 +55,18 @@
   border-bottom: 1px solid var(--border);
 }
 
-.addForm {
+.addSection {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
 
-.addInput {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 10px;
-  font-family: var(--font-mono);
+.addHint {
+  margin: 0;
   font-size: 12px;
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.addInput::placeholder {
   color: var(--text-secondary);
-}
-
-.addBtn {
-  padding: 8px 12px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  background: var(--accent);
-  border-radius: var(--radius-sm);
-}
-
-.addBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .memberList {

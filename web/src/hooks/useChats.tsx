@@ -18,6 +18,7 @@ type ChatsContextValue = {
   loading: boolean
   error: string | null
   updateChatPreview: (chatId: number, body: string, createdAt: string) => void
+  reloadChats: () => Promise<void>
 }
 
 const ChatsContext = createContext<ChatsContextValue | null>(null)
@@ -33,12 +34,63 @@ function sortChatsByLastMessage(chats: ChatListItem[]): ChatListItem[] {
   })
 }
 
+async function loadPeerNames(
+  items: ChatListItem[],
+  currentUserId: number,
+): Promise<Record<number, string>> {
+  const directChats = items.filter((chat) => chat.type === 'direct' && !chat.title)
+  if (directChats.length === 0) {
+    return {}
+  }
+
+  const entries = await Promise.all(
+    directChats.map(async (chat) => {
+      try {
+        const members = await fetchChatMembers(chat.id)
+        const peer = members.find((member) => member.user_id !== currentUserId)
+        return peer ? ([chat.id, peer.login] as const) : null
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  const next: Record<number, string> = {}
+  for (const entry of entries) {
+    if (entry) {
+      next[entry[0]] = entry[1]
+    }
+  }
+  return next
+}
+
 export function ChatsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, currentUser } = useAuth()
   const [chats, setChats] = useState<ChatListItem[]>([])
   const [peerNames, setPeerNames] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const reloadChats = useCallback(async () => {
+    if (!isAuthenticated || !currentUser) {
+      setChats([])
+      setPeerNames({})
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const items = await fetchChats()
+      setChats(items)
+      setPeerNames(await loadPeerNames(items, currentUser.id))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить чаты')
+    } finally {
+      setLoading(false)
+    }
+  }, [currentUser, isAuthenticated])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -50,55 +102,31 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false
-    setLoading(true)
-    setError(null)
 
-    fetchChats()
-      .then(async (items) => {
+    void (async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const items = await fetchChats()
         if (cancelled) {
           return
         }
-
         setChats(items)
-
-        const directChats = items.filter((chat) => chat.type === 'direct' && !chat.title)
-        if (directChats.length === 0 || !currentUser) {
+        if (currentUser) {
+          setPeerNames(await loadPeerNames(items, currentUser.id))
+        } else {
           setPeerNames({})
-          return
         }
-
-        const entries = await Promise.all(
-          directChats.map(async (chat) => {
-            try {
-              const members = await fetchChatMembers(chat.id)
-              const peer = members.find((member) => member.user_id !== currentUser.id)
-              return peer ? ([chat.id, peer.login] as const) : null
-            } catch {
-              return null
-            }
-          }),
-        )
-
-        if (!cancelled) {
-          const next: Record<number, string> = {}
-          for (const entry of entries) {
-            if (entry) {
-              next[entry[0]] = entry[1]
-            }
-          }
-          setPeerNames(next)
-        }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Не удалось загрузить чаты')
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setLoading(false)
         }
-      })
+      }
+    })()
 
     return () => {
       cancelled = true
@@ -131,8 +159,9 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       updateChatPreview,
+      reloadChats,
     }),
-    [chats, error, loading, peerNames, updateChatPreview],
+    [chats, error, loading, peerNames, reloadChats, updateChatPreview],
   )
 
   return <ChatsContext.Provider value={value}>{children}</ChatsContext.Provider>

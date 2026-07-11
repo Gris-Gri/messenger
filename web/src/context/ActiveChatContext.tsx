@@ -1,21 +1,38 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 
 type ActiveChatContextValue = {
   activeChatId: number | null
   setActiveChatId: (chatId: number) => void
+  /** Счётчик запросов открыть MembersPanel (после создания группы). */
+  membersPanelRequest: number
+  requestOpenMembersPanel: () => void
 }
 
 const ActiveChatContext = createContext<ActiveChatContextValue | null>(null)
 
-export function ActiveChatProvider({ children }: { children: React.ReactNode }) {
+export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const [activeChatId, setActiveChatId] = useState<number | null>(null)
+  const [membersPanelRequest, setMembersPanelRequest] = useState(0)
+
+  const requestOpenMembersPanel = useCallback(() => {
+    setMembersPanelRequest((n) => n + 1)
+  }, [])
 
   const value = useMemo(
     () => ({
       activeChatId,
       setActiveChatId,
+      membersPanelRequest,
+      requestOpenMembersPanel,
     }),
-    [activeChatId],
+    [activeChatId, membersPanelRequest, requestOpenMembersPanel],
   )
 
   return (

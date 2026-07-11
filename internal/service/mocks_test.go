@@ -7,9 +7,10 @@ import (
 )
 
 type mockUserRepo struct {
-	createFn     func(ctx context.Context, login, passwordHash string) (*domain.User, error)
-	getByLoginFn func(ctx context.Context, login string) (*domain.User, error)
-	getByIDFn    func(ctx context.Context, id int64) (*domain.User, error)
+	createFn        func(ctx context.Context, login, passwordHash string) (*domain.User, error)
+	getByLoginFn    func(ctx context.Context, login string) (*domain.User, error)
+	getByIDFn       func(ctx context.Context, id int64) (*domain.User, error)
+	searchByLoginFn func(ctx context.Context, query string, excludeUserID int64, limit int) ([]domain.User, error)
 }
 
 func (m *mockUserRepo) Create(ctx context.Context, login, passwordHash string) (*domain.User, error) {
@@ -22,6 +23,13 @@ func (m *mockUserRepo) GetByLogin(ctx context.Context, login string) (*domain.Us
 
 func (m *mockUserRepo) GetByID(ctx context.Context, id int64) (*domain.User, error) {
 	return m.getByIDFn(ctx, id)
+}
+
+func (m *mockUserRepo) SearchByLogin(ctx context.Context, query string, excludeUserID int64, limit int) ([]domain.User, error) {
+	if m.searchByLoginFn != nil {
+		return m.searchByLoginFn(ctx, query, excludeUserID, limit)
+	}
+	return nil, nil
 }
 
 type mockChatRepo struct {

@@ -38,6 +38,7 @@ function resizeTextarea(element: HTMLTextAreaElement): void {
 
 export function ChatWindow({ chatId, chatTitle, chatType }: ChatWindowProps) {
   const { currentUser } = useAuth()
+  const { membersPanelRequest } = useActiveChat()
   const { isNarrow, toggleSidebar } = useSidebar()
   const { sendMessage, registerChatHandlers } = useWebSocket()
   const {
@@ -56,14 +57,20 @@ export function ChatWindow({ chatId, chatTitle, chatType }: ChatWindowProps) {
   const [membersOpen, setMembersOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const lastMembersRequestRef = useRef(0)
 
   const headerTitle = chatTitle ?? 'Выберите чат'
   const canSend = chatId !== null && draft.trim().length > 0
 
   useEffect(() => {
-    setMembersOpen(false)
     setSearchOpen(false)
-  }, [chatId])
+    if (membersPanelRequest > lastMembersRequestRef.current) {
+      lastMembersRequestRef.current = membersPanelRequest
+      setMembersOpen(true)
+      return
+    }
+    setMembersOpen(false)
+  }, [chatId, membersPanelRequest])
 
   useEffect(() => {
     const textarea = textareaRef.current

@@ -8,6 +8,17 @@ export type ChatListItem = {
   last_message_at?: string | null
 }
 
+/** Ответ POST /chats */
+export type Chat = {
+  id: number
+  type: ChatType
+  title?: string | null
+  user_a_id?: number | null
+  user_b_id?: number | null
+  created_by?: number | null
+  created_at: string
+}
+
 export type User = {
   id: number
   login: string

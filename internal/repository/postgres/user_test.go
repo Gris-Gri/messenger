@@ -52,3 +52,41 @@ func TestUserRepository_CreateDuplicateLogin(t *testing.T) {
 		t.Fatalf("second Create error = %v, want ErrConflict", err)
 	}
 }
+
+func TestUserRepository_SearchByLogin(t *testing.T) {
+	db := newTestDB(t)
+	repo := NewUserRepository(db)
+	ctx := context.Background()
+
+	alice, err := repo.Create(ctx, "alice", "hash")
+	if err != nil {
+		t.Fatalf("Create alice: %v", err)
+	}
+	bob, err := repo.Create(ctx, "bobbie", "hash")
+	if err != nil {
+		t.Fatalf("Create bobbie: %v", err)
+	}
+	if _, err := repo.Create(ctx, "carol", "hash"); err != nil {
+		t.Fatalf("Create carol: %v", err)
+	}
+
+	// Caller matching the query must be excluded.
+	found, err := repo.SearchByLogin(ctx, "ali", alice.ID, 20)
+	if err != nil {
+		t.Fatalf("SearchByLogin: %v", err)
+	}
+	if len(found) != 0 {
+		t.Fatalf("search as alice for \"ali\": got %+v, want empty (self excluded)", found)
+	}
+
+	found, err = repo.SearchByLogin(ctx, "bo", alice.ID, 20)
+	if err != nil {
+		t.Fatalf("SearchByLogin: %v", err)
+	}
+	if len(found) != 1 || found[0].ID != bob.ID || found[0].Login != "bobbie" {
+		t.Fatalf("search for \"bo\": got %+v, want bobbie", found)
+	}
+	if found[0].PasswordHash != "" {
+		t.Fatalf("PasswordHash leaked: %q", found[0].PasswordHash)
+	}
+}

@@ -5,6 +5,7 @@ import { useSidebar } from '../../context/SidebarContext'
 import { useChats } from '../../hooks/useChats'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { formatChatTime } from '../../utils/formatChatTime'
+import { CreateChatModal } from '../CreateChatModal/CreateChatModal'
 import styles from './Sidebar.module.css'
 
 export function Sidebar() {
@@ -13,6 +14,7 @@ export function Sidebar() {
   const { status } = useWebSocket()
   const { isNarrow, sidebarOpen, closeSidebar } = useSidebar()
   const [search, setSearch] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
 
   const isOnline = status === 'online'
 
@@ -49,22 +51,29 @@ export function Sidebar() {
       className={`${styles.sidebar} ${isNarrow && sidebarOpen ? styles.sidebarOpen : ''}`}
     >
       <div className={styles.searchWrap}>
-        <input
-          className={styles.search}
-          type="search"
-          placeholder="Поиск чатов…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className={styles.searchRow}>
+          <input
+            className={styles.search}
+            type="search"
+            placeholder="Поиск чатов…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button
+            type="button"
+            className={styles.createBtn}
+            aria-label="Создать чат"
+            title="Создать чат"
+            onClick={() => setCreateOpen(true)}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       <ul className={styles.chatList}>
-        {loading && (
-          <li className={styles.stateMessage}>Загрузка…</li>
-        )}
-        {!loading && error && (
-          <li className={styles.stateMessage}>{error}</li>
-        )}
+        {loading && <li className={styles.stateMessage}>Загрузка…</li>}
+        {!loading && error && <li className={styles.stateMessage}>{error}</li>}
         {!loading && !error && filteredChats.length === 0 && (
           <li className={styles.stateMessage}>
             {search.trim() ? 'Ничего не найдено' : 'Нет чатов'}
@@ -105,6 +114,8 @@ export function Sidebar() {
         </span>
         <span>{isOnline ? 'online' : 'reconnecting'}</span>
       </footer>
+
+      <CreateChatModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </aside>
   )
 }

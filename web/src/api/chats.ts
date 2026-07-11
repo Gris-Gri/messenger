@@ -1,8 +1,22 @@
-import type { ChatListItem } from '../types/domain'
+import type { Chat, ChatListItem } from '../types/domain'
 import { apiClient } from './client'
 
 export function fetchChats(): Promise<ChatListItem[]> {
   return apiClient<ChatListItem[]>('/chats')
+}
+
+export function createDirectChat(userId: number): Promise<Chat> {
+  return apiClient<Chat>('/chats', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'direct', user_id: userId }),
+  })
+}
+
+export function createGroupChat(title: string): Promise<Chat> {
+  return apiClient<Chat>('/chats', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'group', title }),
+  })
 }
 
 export function getChatDisplayName(

@@ -39,6 +39,9 @@ type mockMemberRepo struct {
 func (m *mockUserRepo) Create(context.Context, string, string) (*domain.User, error) { return nil, nil }
 func (m *mockUserRepo) GetByLogin(context.Context, string) (*domain.User, error)     { return nil, nil }
 func (m *mockUserRepo) GetByID(context.Context, int64) (*domain.User, error)         { return nil, nil }
+func (m *mockUserRepo) SearchByLogin(context.Context, string, int64, int) ([]domain.User, error) {
+	return nil, nil
+}
 
 func (m *mockChatRepo) CreateDirect(context.Context, int64, int64) (*domain.Chat, error) {
 	return nil, nil

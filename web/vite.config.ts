@@ -10,6 +10,7 @@ export default defineConfig({
       '/login': 'http://localhost:8080',
       '/refresh': 'http://localhost:8080',
       '/chats': 'http://localhost:8080',
+      '/users': 'http://localhost:8080',
       '/ws': {
         target: 'ws://localhost:8080',
         ws: true,
