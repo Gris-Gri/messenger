@@ -52,7 +52,7 @@ func main() {
 
 	hub := wshandler.NewHub()
 	notifier := wshandler.NewHubReadNotifier(hub, memberRepo, logger)
-	svc := service.New(userRepo, chatRepo, messageRepo, memberRepo, readStateRepo, notifier, jwtManager)
+	svc := service.New(userRepo, chatRepo, messageRepo, memberRepo, readStateRepo, notifier, jwtManager).WithPresence(hub)
 
 	wsHandler := wshandler.NewHandler(svc, jwtManager, hub, wshandler.Config{
 		AllowedOrigins: parseAllowedOrigins(os.Getenv("WS_ALLOWED_ORIGINS")),

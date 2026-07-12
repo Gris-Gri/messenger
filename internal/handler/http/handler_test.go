@@ -126,6 +126,7 @@ type mockUserRepo struct {
 	searchByLoginFn      func(ctx context.Context, query string, excludeUserID int64, limit int) ([]domain.User, error)
 	updateLoginFn        func(ctx context.Context, userID int64, login string) (*domain.User, error)
 	updatePasswordHashFn func(ctx context.Context, userID int64, passwordHash string) error
+	updateLastSeenAtFn   func(ctx context.Context, userID int64, at time.Time) (time.Time, error)
 }
 
 func (m *mockUserRepo) Create(ctx context.Context, login, passwordHash string) (*domain.User, error) {
@@ -155,10 +156,17 @@ func (m *mockUserRepo) UpdatePasswordHash(ctx context.Context, userID int64, pas
 	}
 	return nil
 }
+func (m *mockUserRepo) UpdateLastSeenAt(ctx context.Context, userID int64, at time.Time) (time.Time, error) {
+	if m.updateLastSeenAtFn != nil {
+		return m.updateLastSeenAtFn(ctx, userID, at)
+	}
+	return at, nil
+}
 
 type mockChatRepo struct {
 	createDirectFn     func(ctx context.Context, userAID, userBID int64) (*domain.Chat, error)
 	createGroupFn      func(ctx context.Context, title string, createdBy int64) (*domain.Chat, error)
+	updateChatTitleFn  func(ctx context.Context, chatID int64, title string) (*domain.Chat, error)
 	getByIDFn          func(ctx context.Context, id int64) (*domain.Chat, error)
 	getDirectByUsersFn func(ctx context.Context, userAID, userBID int64) (*domain.Chat, error)
 	listByUserFn       func(ctx context.Context, userID int64) ([]domain.ChatListItem, error)
@@ -169,6 +177,12 @@ func (m *mockChatRepo) CreateDirect(ctx context.Context, userAID, userBID int64)
 }
 func (m *mockChatRepo) CreateGroup(ctx context.Context, title string, createdBy int64) (*domain.Chat, error) {
 	return m.createGroupFn(ctx, title, createdBy)
+}
+func (m *mockChatRepo) UpdateChatTitle(ctx context.Context, chatID int64, title string) (*domain.Chat, error) {
+	if m.updateChatTitleFn != nil {
+		return m.updateChatTitleFn(ctx, chatID, title)
+	}
+	return nil, nil
 }
 func (m *mockChatRepo) GetByID(ctx context.Context, id int64) (*domain.Chat, error) {
 	return m.getByIDFn(ctx, id)
@@ -197,11 +211,12 @@ func (m *mockMessageRepo) Search(ctx context.Context, chatID int64, query string
 }
 
 type mockMemberRepo struct {
-	addFn         func(ctx context.Context, member *domain.ChatMember) error
-	removeFn      func(ctx context.Context, chatID, userID int64) error
-	getFn         func(ctx context.Context, chatID, userID int64) (*domain.ChatMember, error)
-	listUserIDsFn func(ctx context.Context, chatID int64) ([]int64, error)
-	listByChatFn  func(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
+	addFn                   func(ctx context.Context, member *domain.ChatMember) error
+	removeFn                func(ctx context.Context, chatID, userID int64) error
+	getFn                   func(ctx context.Context, chatID, userID int64) (*domain.ChatMember, error)
+	listUserIDsFn           func(ctx context.Context, chatID int64) ([]int64, error)
+	listByChatFn            func(ctx context.Context, chatID int64) ([]domain.ChatMember, error)
+	listSharedChatUserIDsFn func(ctx context.Context, userID int64) ([]int64, error)
 }
 
 func (m *mockMemberRepo) Add(ctx context.Context, member *domain.ChatMember) error {
@@ -222,6 +237,12 @@ func (m *mockMemberRepo) ListUserIDs(ctx context.Context, chatID int64) ([]int64
 func (m *mockMemberRepo) ListByChat(ctx context.Context, chatID int64) ([]domain.ChatMember, error) {
 	if m.listByChatFn != nil {
 		return m.listByChatFn(ctx, chatID)
+	}
+	return nil, nil
+}
+func (m *mockMemberRepo) ListSharedChatUserIDs(ctx context.Context, userID int64) ([]int64, error) {
+	if m.listSharedChatUserIDsFn != nil {
+		return m.listSharedChatUserIDsFn(ctx, userID)
 	}
 	return nil, nil
 }

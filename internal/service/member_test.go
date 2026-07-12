@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"messenger/internal/domain"
 )
@@ -98,5 +99,48 @@ func TestService_AddMemberAdminSuccess(t *testing.T) {
 	}
 	if !added {
 		t.Fatal("expected member to be added")
+	}
+}
+
+type stubPresence map[int64]bool
+
+func (s stubPresence) IsOnline(userID int64) bool {
+	return s[userID]
+}
+
+func TestService_ListMembersEnrichesOnline(t *testing.T) {
+	t.Parallel()
+
+	lastSeen := time.Date(2026, 7, 12, 10, 0, 0, 0, time.UTC)
+	members := &mockMemberRepo{
+		getFn: func(_ context.Context, chatID, userID int64) (*domain.ChatMember, error) {
+			return &domain.ChatMember{ChatID: chatID, UserID: userID, Role: domain.RoleMember}, nil
+		},
+		listByChatFn: func(_ context.Context, chatID int64) ([]domain.ChatMember, error) {
+			return []domain.ChatMember{
+				{ChatID: chatID, UserID: 1, Login: "alice", Role: domain.RoleAdmin},
+				{ChatID: chatID, UserID: 2, Login: "bob", Role: domain.RoleMember, LastSeenAt: &lastSeen},
+			}, nil
+		},
+	}
+
+	svc := New(&mockUserRepo{}, &mockChatRepo{}, &mockMessageRepo{}, members, &mockReadStateRepo{}, nil, testJWTManager()).
+		WithPresence(stubPresence{1: true})
+
+	got, err := svc.ListMembers(context.Background(), 1, 10)
+	if err != nil {
+		t.Fatalf("ListMembers: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d", len(got))
+	}
+	if !got[0].Online {
+		t.Fatal("alice should be online")
+	}
+	if got[1].Online {
+		t.Fatal("bob should be offline")
+	}
+	if got[1].LastSeenAt == nil || !got[1].LastSeenAt.Equal(lastSeen) {
+		t.Fatalf("bob last_seen_at = %v", got[1].LastSeenAt)
 	}
 }

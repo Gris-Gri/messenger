@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"messenger/internal/domain"
 )
@@ -141,6 +142,23 @@ func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID int64, p
 	}
 
 	return nil
+}
+
+func (r *UserRepository) UpdateLastSeenAt(ctx context.Context, userID int64, at time.Time) (time.Time, error) {
+	const q = `
+		UPDATE users
+		SET last_seen_at = $2
+		WHERE id = $1
+		RETURNING last_seen_at
+	`
+
+	var lastSeen time.Time
+	err := r.db.pool.QueryRow(ctx, q, userID, at).Scan(&lastSeen)
+	if err != nil {
+		return time.Time{}, mapError(err)
+	}
+
+	return lastSeen, nil
 }
 
 var _ domain.UserRepository = (*UserRepository)(nil)

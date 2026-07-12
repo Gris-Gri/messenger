@@ -1,16 +1,62 @@
 .sidebar {
+  position: relative;
+  z-index: var(--z-content);
   display: flex;
   flex-direction: column;
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   height: 100%;
   background: var(--bg-sidebar);
+  border-right: none;
+}
+
+.sidebarUpper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--border);
 }
 
-.searchWrap {
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
+.header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px 18px;
+  border-bottom: none;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 1px;
+  background: var(--header-accent-glow);
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandIcon {
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
 }
 
 .searchRow {
@@ -19,10 +65,25 @@
   gap: 8px;
 }
 
-.search {
+.searchField {
+  position: relative;
   flex: 1;
   min-width: 0;
-  padding: 9px 12px;
+}
+
+.searchIcon {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  font-size: 15px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -38,18 +99,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  font-size: 22px;
-  font-weight: 500;
-  line-height: 1;
+  width: 42px;
+  height: 42px;
   color: var(--text-primary);
   background: var(--accent);
   border-radius: var(--radius-sm);
+  transition: transform 140ms cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 .createBtn:hover {
   filter: brightness(1.08);
+}
+
+.createBtn:active {
+  transform: scale(0.95);
 }
 
 .chatList {
@@ -58,12 +121,55 @@
   list-style: none;
   margin: 0;
   padding: 8px 0;
+  height: 100%;
+}
+
+.listRegion {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.listRegion::before,
+.listRegion::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 52px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.listRegion::before {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 11%, transparent),
+    transparent
+  );
+}
+
+.listRegion::after {
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--accent) 10%, transparent),
+    transparent
+  );
 }
 
 .stateMessage {
   padding: 16px 20px;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
+}
+
+.emptyItem {
+  list-style: none;
 }
 
 .chatItem {
@@ -71,18 +177,23 @@
   flex-direction: row;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   cursor: pointer;
   border-left: 3px solid transparent;
+  transition: background-color 120ms ease;
 }
 
 .chatItem:hover {
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
 }
 
 .chatItemActive {
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
   border-left-color: var(--accent);
+}
+
+.chatItemActive:hover {
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
 }
 
 .chatBody {
@@ -103,7 +214,7 @@
 .chatName {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -138,29 +249,40 @@
 .chatTime {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
 .chatPreview {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Layout/spacing only — border/bg/height live in global .chromeBar.
+ * border-right continues the sidebar/chat divider through the chrome strip. */
 .footer {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-2xs);
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border);
+}
+
+.profileCard {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-secondary);
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--bg-sidebar) 40%, var(--chrome-bar-bg));
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: var(--radius-md);
 }
 
 .profileBtn {
@@ -169,7 +291,7 @@
   gap: 10px;
   min-width: 0;
   flex: 1;
-  padding: 4px 6px;
+  padding: 0;
   text-align: left;
   background: transparent;
   border: none;
@@ -177,8 +299,8 @@
   color: var(--text-primary);
 }
 
-.profileBtn:hover {
-  background: var(--bg-elevated);
+.profileBtn:hover .profileLogin {
+  color: var(--accent);
 }
 
 .profileLogin {
@@ -187,8 +309,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-heading);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
+  transition: color 120ms ease;
 }
 
 .connection {
@@ -196,19 +319,23 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  padding-right: 2px;
 }
 
 .statusDot {
-  font-size: 14px;
-  line-height: 1;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .statusDotOnline {
-  color: var(--online);
+  background: var(--online);
 }
 
 .statusDotReconnecting {
-  color: var(--text-secondary);
+  background: var(--text-secondary);
+  animation: reconnectPulse 1s ease-in-out infinite;
 }
 
 @media (max-width: 768px) {
@@ -217,7 +344,7 @@
     top: 0;
     left: 0;
     bottom: 0;
-    z-index: 30;
+    z-index: var(--z-panel);
     transform: translateX(-100%);
     transition: transform 180ms ease-out;
     box-shadow: 8px 0 24px color-mix(in srgb, var(--bg-primary) 60%, transparent);

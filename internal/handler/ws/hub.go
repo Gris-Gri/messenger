@@ -18,7 +18,8 @@ func NewHub() *Hub {
 	}
 }
 
-func (h *Hub) Register(client *Client) {
+// Register adds a client connection. Returns true if this is the user's first active connection.
+func (h *Hub) Register(client *Client) (becameOnline bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -26,22 +27,35 @@ func (h *Hub) Register(client *Client) {
 	if !ok {
 		conns = make(map[*Client]struct{})
 		h.users[client.userID] = conns
+		becameOnline = true
 	}
 	conns[client] = struct{}{}
+	return becameOnline
 }
 
-func (h *Hub) Unregister(client *Client) {
+// Unregister removes a client connection. Returns true if this was the user's last connection.
+func (h *Hub) Unregister(client *Client) (becameOffline bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	conns, ok := h.users[client.userID]
 	if !ok {
-		return
+		return false
 	}
 	delete(conns, client)
 	if len(conns) == 0 {
 		delete(h.users, client.userID)
+		return true
 	}
+	return false
+}
+
+func (h *Hub) IsOnline(userID int64) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	conns, ok := h.users[userID]
+	return ok && len(conns) > 0
 }
 
 func (h *Hub) BroadcastNewMessage(chatID int64, senderID int64, payload []byte, recipientIDs []int64) {
@@ -52,12 +66,20 @@ func (h *Hub) BroadcastRead(chatID int64, readerID int64, payload []byte, recipi
 	h.broadcastExcept(readerID, payload, recipientIDs)
 }
 
+func (h *Hub) BroadcastChatUpdated(chatID int64, actorUserID int64, payload []byte, recipientIDs []int64) {
+	h.broadcastExcept(actorUserID, payload, recipientIDs)
+}
+
+func (h *Hub) BroadcastToUsers(payload []byte, recipientIDs []int64) {
+	h.broadcastExcept(0, payload, recipientIDs)
+}
+
 func (h *Hub) broadcastExcept(excludeUserID int64, payload []byte, recipientIDs []int64) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	for _, userID := range recipientIDs {
-		if userID == excludeUserID {
+		if excludeUserID != 0 && userID == excludeUserID {
 			continue
 		}
 		conns := h.users[userID]

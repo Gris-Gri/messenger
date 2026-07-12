@@ -46,11 +46,17 @@ func (m *mockUserRepo) UpdateLogin(context.Context, int64, string) (*domain.User
 	return nil, nil
 }
 func (m *mockUserRepo) UpdatePasswordHash(context.Context, int64, string) error { return nil }
+func (m *mockUserRepo) UpdateLastSeenAt(_ context.Context, _ int64, at time.Time) (time.Time, error) {
+	return at, nil
+}
 
 func (m *mockChatRepo) CreateDirect(context.Context, int64, int64) (*domain.Chat, error) {
 	return nil, nil
 }
 func (m *mockChatRepo) CreateGroup(context.Context, string, int64) (*domain.Chat, error) {
+	return nil, nil
+}
+func (m *mockChatRepo) UpdateChatTitle(context.Context, int64, string) (*domain.Chat, error) {
 	return nil, nil
 }
 func (m *mockChatRepo) GetByID(context.Context, int64) (*domain.Chat, error) { return nil, nil }
@@ -89,6 +95,9 @@ func (m *mockMemberRepo) ListUserIDs(ctx context.Context, chatID int64) ([]int64
 	return nil, nil
 }
 func (m *mockMemberRepo) ListByChat(context.Context, int64) ([]domain.ChatMember, error) {
+	return nil, nil
+}
+func (m *mockMemberRepo) ListSharedChatUserIDs(context.Context, int64) ([]int64, error) {
 	return nil, nil
 }
 

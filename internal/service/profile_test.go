@@ -20,11 +20,42 @@ func TestService_UpdateLoginConflict(t *testing.T) {
 			return nil, domain.ErrConflict
 		},
 	}
-	svc := New(users, &mockChatRepo{}, &mockMessageRepo{}, &mockMemberRepo{}, &mockReadStateRepo{}, nil, testJWTManager())
+	notifier := &mockRealtimeNotifier{}
+	svc := New(users, &mockChatRepo{}, &mockMessageRepo{}, &mockMemberRepo{}, &mockReadStateRepo{}, notifier, testJWTManager())
 
 	_, err := svc.UpdateLogin(context.Background(), 1, "taken")
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("error = %v, want ErrConflict", err)
+	}
+	if len(notifier.userUpdatedCalls) != 0 {
+		t.Fatal("must not notify on conflict")
+	}
+}
+
+func TestService_UpdateLoginNotifies(t *testing.T) {
+	t.Parallel()
+
+	users := &mockUserRepo{
+		updateLoginFn: func(_ context.Context, userID int64, login string) (*domain.User, error) {
+			return &domain.User{ID: userID, Login: login}, nil
+		},
+	}
+	notifier := &mockRealtimeNotifier{}
+	svc := New(users, &mockChatRepo{}, &mockMessageRepo{}, &mockMemberRepo{}, &mockReadStateRepo{}, notifier, testJWTManager())
+
+	user, err := svc.UpdateLogin(context.Background(), 1, "alice2")
+	if err != nil {
+		t.Fatalf("UpdateLogin: %v", err)
+	}
+	if user.Login != "alice2" {
+		t.Fatalf("login = %q", user.Login)
+	}
+	if len(notifier.userUpdatedCalls) != 1 {
+		t.Fatalf("userUpdatedCalls = %d, want 1", len(notifier.userUpdatedCalls))
+	}
+	call := notifier.userUpdatedCalls[0]
+	if call.userID != 1 || call.login != "alice2" {
+		t.Fatalf("unexpected notify call: %+v", call)
 	}
 }
 

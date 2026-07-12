@@ -4,7 +4,7 @@
   flex: 1;
   min-width: 0;
   height: 100%;
-  background: var(--bg-primary);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -17,25 +17,39 @@
 }
 
 .header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 20px 16px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: none;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 1px;
+  background: var(--header-accent-glow);
+  pointer-events: none;
 }
 
 .menuBtn {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
-  font-size: 16px;
   color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
 }
 
@@ -50,15 +64,16 @@
 
   .header {
     gap: 10px;
-    padding: 12px 14px;
+    padding: 12px 14px 14px;
+  }
+
+  .header::after {
+    left: 14px;
+    right: 14px;
   }
 
   .bubbleWrap {
     max-width: 85%;
-  }
-
-  .inputArea {
-    padding: 12px 14px;
   }
 }
 
@@ -67,7 +82,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 0;
   text-align: left;
   background: transparent;
@@ -85,7 +100,7 @@
 .headerTitle {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -100,13 +115,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
+  width: 36px;
+  height: 36px;
   color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
+  transition: color 120ms ease, border-color 120ms ease;
 }
 
 .headerBtn:hover {
@@ -120,7 +135,7 @@
 
 .headerBtnActive {
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--glass-border));
 }
 
 .feedArea {
@@ -128,6 +143,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
 }
 
 .emptyState,
@@ -137,13 +153,16 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
+  background: transparent;
+  position: relative;
+  z-index: auto;
 }
 
 .errorBanner {
   padding: 8px 20px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-primary);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-bottom: 1px solid var(--border);
@@ -153,7 +172,7 @@
   align-self: center;
   padding: 4px 0 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   list-style: none;
 }
@@ -163,27 +182,35 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
+  gap: 14px;
+  padding: 22px 24px;
   list-style: none;
   margin: 0;
   min-height: 0;
+  background: transparent;
+  scrollbar-width: none;
+}
+
+.messageList::-webkit-scrollbar {
+  display: none;
 }
 
 .bubbleWrap {
   display: flex;
-  flex-direction: column;
-  max-width: 65%;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 72%;
+  animation: messageIn 180ms ease-out both;
 }
 
 .bubbleWrapOwn {
   align-self: flex-end;
-  align-items: flex-end;
+  flex-direction: row-reverse;
 }
 
 .bubbleWrapOther {
   align-self: flex-start;
-  align-items: flex-start;
 }
 
 .bubbleWrapHighlight .bubble {
@@ -191,18 +218,47 @@
   outline-offset: 2px;
 }
 
+.avatarSlot {
+  flex-shrink: 0;
+  width: 42px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.avatarSpacer {
+  display: block;
+  width: 42px;
+  height: 42px;
+}
+
+.bubbleColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bubbleWrapOwn .bubbleColumn {
+  align-items: flex-end;
+}
+
+.bubbleWrapOther .bubbleColumn {
+  align-items: flex-start;
+}
+
 .senderName {
   margin: 0 0 4px 4px;
   font-family: var(--font-heading);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--accent);
 }
 
 .bubble {
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.45;
   word-break: break-word;
 }
@@ -230,27 +286,36 @@
 
 .timestamp {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
+/* Overrides solid .chromeBar fill — glass only on the composer, not the sidebar footer */
 .inputArea {
-  display: flex;
+  gap: 12px;
   align-items: flex-end;
-  gap: 10px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
+  /* Grow with multiline draft; .chromeBar sets the shared base height */
+  height: auto;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  /* Left edge omitted: vertical divider is sidebar footer border-right (--border) */
+  border-top: 1px solid var(--glass-border);
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  border-left: none;
 }
 
 .textarea {
   flex: 1;
-  min-height: 40px;
-  max-height: 120px;
-  padding: 10px 14px;
+  min-height: 44px;
+  max-height: 140px;
+  padding: 11px 14px;
   resize: none;
   overflow-y: auto;
   scrollbar-width: none;
-  background: var(--bg-elevated);
+  font-size: 16px;
+  background: var(--bg-sidebar);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -269,13 +334,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
-  font-size: 18px;
   color: var(--text-primary);
   background: var(--accent);
   border-radius: var(--radius-md);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sendBtn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.sendBtn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .sendBtn:disabled {

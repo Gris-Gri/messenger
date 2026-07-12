@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"messenger/internal/domain"
 )
@@ -138,5 +139,25 @@ func TestUserRepository_UpdatePasswordHash(t *testing.T) {
 	}
 	if got.PasswordHash != "new-hash" {
 		t.Fatalf("PasswordHash = %q, want new-hash", got.PasswordHash)
+	}
+}
+
+func TestUserRepository_UpdateLastSeenAt(t *testing.T) {
+	db := newTestDB(t)
+	repo := NewUserRepository(db)
+	ctx := context.Background()
+
+	alice, err := repo.Create(ctx, "alice", "hash")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	at := time.Date(2026, 7, 12, 15, 30, 0, 0, time.UTC)
+	got, err := repo.UpdateLastSeenAt(ctx, alice.ID, at)
+	if err != nil {
+		t.Fatalf("UpdateLastSeenAt: %v", err)
+	}
+	if !got.Equal(at) {
+		t.Fatalf("last_seen_at = %v, want %v", got, at)
 	}
 }

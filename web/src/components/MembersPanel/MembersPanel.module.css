@@ -1,9 +1,13 @@
 .membersPanel {
+  position: relative;
+  z-index: var(--z-panel);
   flex-shrink: 0;
   align-self: stretch;
   width: 0;
   overflow: hidden;
-  background: var(--bg-sidebar);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-left: 1px solid transparent;
   transition:
     width 0.22s ease,
@@ -12,7 +16,12 @@
 
 .open {
   width: 300px;
-  border-left-color: var(--border);
+  border-left-color: var(--glass-border);
+}
+
+/* ~28% шире: role + «Удалить» + last_seen в групповой карточке */
+.openGroup {
+  width: 384px;
 }
 
 .closed {
@@ -28,34 +37,140 @@
   min-height: 0;
 }
 
+.openGroup .panelInner {
+  width: 384px;
+}
+
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border-bottom: 1px solid var(--border);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
 }
 
 .title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 15px;
+  font-size: var(--font-size-lg);
   font-weight: 700;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.closeBtn {
+.editTitleBtn {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  font-size: 18px;
-  line-height: 1;
   color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
+.editTitleBtn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+}
+
+.titleEdit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.titleInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--control-padding-y) var(--control-padding-x);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.titleInput:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.titleInputError {
+  border-color: #e05c5c;
+}
+
+.titleEditActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.titleSaveBtn {
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--btn-font-size);
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
+.titleCancelBtn {
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--btn-font-size);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.titleCancelBtn:hover {
+  color: var(--text-primary);
+}
+
+.titleSaveBtn:disabled,
+.titleCancelBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.titleFieldError {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: #e05c5c;
+}
+
+.closeBtn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
 }
 
@@ -64,8 +179,8 @@
 }
 
 .errorBanner {
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-bottom: 1px solid var(--border);
@@ -74,14 +189,14 @@
 .addSection {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 
 .addHint {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--label-font-size);
   color: var(--text-secondary);
 }
 
@@ -90,51 +205,92 @@
   overflow-y: auto;
   list-style: none;
   margin: 0;
-  padding: 8px 0;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .stateMessage {
-  padding: 24px 16px;
-  font-size: 14px;
+  padding: var(--space-6) var(--space-4);
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
   text-align: center;
 }
 
 .memberItem {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-}
-
-.memberInfo {
-  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--bg-sidebar) 40%, var(--chrome-bar-bg, var(--bg-elevated)));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
 }
 
 .memberLogin {
   display: block;
-  font-size: 14px;
+  min-width: 0;
+  font-size: var(--font-size-base);
   font-weight: 500;
+  line-height: 1.2;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.memberMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
 .memberRole {
-  display: block;
-  margin-top: 2px;
+  min-width: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--font-size-2xs);
+  line-height: 1.2;
   color: var(--text-secondary);
   text-transform: lowercase;
 }
 
+.presenceOnline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  line-height: 1.2;
+  color: var(--online);
+}
+
+.presenceDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--online);
+  flex-shrink: 0;
+}
+
+.presenceOffline {
+  display: block;
+  width: 100%;
+  font-size: var(--font-size-sm);
+  line-height: 1.2;
+  color: var(--text-secondary);
+  overflow-wrap: break-word;
+}
+
 .removeBtn {
   flex-shrink: 0;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 1px 8px;
+  font-size: var(--font-size-sm);
+  line-height: 1.2;
+  white-space: nowrap;
   color: var(--text-secondary);
   background: var(--bg-elevated);
   border: 1px solid var(--border);

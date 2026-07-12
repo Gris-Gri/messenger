@@ -63,4 +63,13 @@ export type ChatMember = {
   user_id: number
   login: string
   role: 'member' | 'admin'
+  online?: boolean
+  last_seen_at?: string | null
+}
+
+/** Локальный кэш пользователя для UI (логин + presence). */
+export type CachedUser = {
+  login: string
+  online: boolean
+  last_seen_at: string | null
 }

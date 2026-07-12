@@ -91,9 +91,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cancelAuth()
 
 	client := newClient(h.hub, conn, userID)
-	h.hub.Register(client)
+	becameOnline := h.hub.Register(client)
+	if becameOnline {
+		h.svc.NotifyUserConnected(r.Context(), userID)
+	}
 	defer func() {
-		h.hub.Unregister(client)
+		becameOffline := h.hub.Unregister(client)
+		if becameOffline {
+			if err := h.svc.NotifyUserDisconnected(context.Background(), userID); err != nil {
+				h.logger.Warn("presence offline update failed", "err", err, "user_id", userID)
+			}
+		}
 		client.close()
 	}()
 

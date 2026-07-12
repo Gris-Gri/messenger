@@ -97,7 +97,7 @@ func (r *MemberRepository) ListUserIDs(ctx context.Context, chatID int64) ([]int
 
 func (r *MemberRepository) ListByChat(ctx context.Context, chatID int64) ([]domain.ChatMember, error) {
 	const q = `
-		SELECT cm.chat_id, cm.user_id, u.login, cm.role, cm.joined_at
+		SELECT cm.chat_id, cm.user_id, u.login, cm.role, cm.joined_at, u.last_seen_at
 		FROM chat_members cm
 		JOIN users u ON u.id = cm.user_id
 		WHERE cm.chat_id = $1
@@ -120,6 +120,7 @@ func (r *MemberRepository) ListByChat(ctx context.Context, chatID int64) ([]doma
 			&member.Login,
 			&role,
 			&member.JoinedAt,
+			&member.LastSeenAt,
 		); err != nil {
 			return nil, fmt.Errorf("postgres: scan chat member: %w", err)
 		}
@@ -135,6 +136,40 @@ func (r *MemberRepository) ListByChat(ctx context.Context, chatID int64) ([]doma
 	}
 
 	return members, nil
+}
+
+func (r *MemberRepository) ListSharedChatUserIDs(ctx context.Context, userID int64) ([]int64, error) {
+	const q = `
+		SELECT DISTINCT cm2.user_id
+		FROM chat_members cm1
+		JOIN chat_members cm2 ON cm2.chat_id = cm1.chat_id AND cm2.user_id <> cm1.user_id
+		WHERE cm1.user_id = $1
+		ORDER BY cm2.user_id
+	`
+
+	rows, err := r.db.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("postgres: scan shared chat user_id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: %w", err)
+	}
+
+	if ids == nil {
+		ids = []int64{}
+	}
+
+	return ids, nil
 }
 
 var _ domain.MemberRepository = (*MemberRepository)(nil)
