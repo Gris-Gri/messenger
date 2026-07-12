@@ -55,7 +55,7 @@ func newE2EEnv(t *testing.T) *e2eEnv {
 
 	hub := wshandler.NewHub()
 	notifier := wshandler.NewHubReadNotifier(hub, memberRepo, slog.Default())
-	svc := service.New(userRepo, chatRepo, messageRepo, memberRepo, readStateRepo, notifier, jwtManager)
+	svc := service.New(userRepo, chatRepo, messageRepo, memberRepo, readStateRepo, notifier, jwtManager).WithPresence(hub)
 
 	wsHandler := wshandler.NewHandler(svc, jwtManager, hub, wshandler.Config{}, slog.Default())
 
@@ -274,21 +274,42 @@ func wsSendMessage(conn *websocket.Conn, chatID int64, clientMsgID, body string)
 	return conn.WriteMessage(websocket.TextMessage, frame)
 }
 
+func wsReadFrameOfType(t *testing.T, conn *websocket.Conn, wantType string) []byte {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_ = conn.SetReadDeadline(deadline)
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read %s: %v", wantType, err)
+		}
+
+		var envelope struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			t.Fatalf("unmarshal frame envelope: %v", err)
+		}
+		switch envelope.Type {
+		case wantType:
+			return payload
+		case wshandler.FrameTypePresence, wshandler.FrameTypeUserUpdated, wshandler.FrameTypeChatUpdated, wshandler.FrameTypeRead:
+			continue
+		default:
+			t.Fatalf("frame type = %q, want %s", envelope.Type, wantType)
+		}
+	}
+}
+
 func wsReadAck(t *testing.T, conn *websocket.Conn) wsAck {
 	t.Helper()
 
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, payload, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("read ack: %v", err)
-	}
+	payload := wsReadFrameOfType(t, conn, wshandler.FrameTypeAck)
 
 	var ack wsAck
 	if err := json.Unmarshal(payload, &ack); err != nil {
 		t.Fatalf("unmarshal ack: %v", err)
-	}
-	if ack.Type != wshandler.FrameTypeAck {
-		t.Fatalf("frame type = %q, want ack", ack.Type)
 	}
 	return ack
 }
@@ -296,18 +317,11 @@ func wsReadAck(t *testing.T, conn *websocket.Conn) wsAck {
 func wsReadNewMessage(t *testing.T, conn *websocket.Conn) wsNewMessage {
 	t.Helper()
 
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, payload, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("read new_message: %v", err)
-	}
+	payload := wsReadFrameOfType(t, conn, wshandler.FrameTypeNewMessage)
 
 	var push wsNewMessage
 	if err := json.Unmarshal(payload, &push); err != nil {
 		t.Fatalf("unmarshal new_message: %v", err)
-	}
-	if push.Type != wshandler.FrameTypeNewMessage {
-		t.Fatalf("frame type = %q, want new_message", push.Type)
 	}
 	return push
 }

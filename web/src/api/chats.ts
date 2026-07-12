@@ -28,13 +28,14 @@ export function updateChatTitle(chatId: number, title: string): Promise<Chat> {
 
 export function getChatDisplayName(
   chat: ChatListItem,
-  peerNames: Record<number, string> = {},
+  peerLogin?: string | null,
 ): string {
   if (chat.title) {
     return chat.title
   }
   if (chat.type === 'direct') {
-    return peerNames[chat.id] ?? 'Личный чат'
+    const login = peerLogin?.trim()
+    return login || 'Личный чат'
   }
   return `Чат ${chat.id}`
 }

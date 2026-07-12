@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type UserRepository interface {
 	Create(ctx context.Context, login, passwordHash string) (*User, error)
@@ -11,6 +14,8 @@ type UserRepository interface {
 	UpdateLogin(ctx context.Context, userID int64, login string) (*User, error)
 	// UpdatePasswordHash does not return the hash.
 	UpdatePasswordHash(ctx context.Context, userID int64, passwordHash string) error
+	// UpdateLastSeenAt sets last_seen_at and returns the stored timestamp.
+	UpdateLastSeenAt(ctx context.Context, userID int64, at time.Time) (time.Time, error)
 }
 
 type ChatRepository interface {
@@ -34,6 +39,8 @@ type MemberRepository interface {
 	Get(ctx context.Context, chatID, userID int64) (*ChatMember, error)
 	ListUserIDs(ctx context.Context, chatID int64) ([]int64, error)
 	ListByChat(ctx context.Context, chatID int64) ([]ChatMember, error)
+	// ListSharedChatUserIDs returns distinct user IDs that share at least one chat with userID.
+	ListSharedChatUserIDs(ctx context.Context, userID int64) ([]int64, error)
 }
 
 type ReadStateRepository interface {

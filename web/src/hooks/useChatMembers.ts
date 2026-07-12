@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { addChatMember, fetchChatMembers, removeChatMember } from '../api/members'
 import { ApiError } from '../api/errors'
+import { membersToUpserts, useUsers } from '../context/UsersContext'
 import type { ChatMember } from '../types/domain'
 
 function forbiddenMessage(err: unknown): string | null {
@@ -15,6 +16,7 @@ export function useChatMembers(
   currentUserId: number | null,
   enabled: boolean,
 ) {
+  const { upsertUsers } = useUsers()
   const [members, setMembers] = useState<ChatMember[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +39,7 @@ export function useChatMembers(
 
     try {
       const next = await fetchChatMembers(chatId)
+      upsertUsers(membersToUpserts(next))
       setMembers(next)
     } catch (err: unknown) {
       setMembers([])
@@ -44,7 +47,7 @@ export function useChatMembers(
     } finally {
       setLoading(false)
     }
-  }, [chatId])
+  }, [chatId, upsertUsers])
 
   useEffect(() => {
     if (!enabled || chatId === null) {

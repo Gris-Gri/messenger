@@ -8,6 +8,8 @@ const (
 	FrameTypeSendMessage = "send_message"
 	FrameTypeRead        = "read"
 	FrameTypeChatUpdated = "chat_updated"
+	FrameTypeUserUpdated = "user_updated"
+	FrameTypePresence    = "presence"
 )
 
 type authFrame struct {
@@ -44,6 +46,19 @@ type chatUpdatedFrame struct {
 	Type   string `json:"type"`
 	ChatID int64  `json:"chat_id"`
 	Title  string `json:"title"`
+}
+
+type userUpdatedFrame struct {
+	Type   string `json:"type"`
+	UserID int64  `json:"user_id"`
+	Login  string `json:"login"`
+}
+
+type presenceFrame struct {
+	Type       string  `json:"type"`
+	UserID     int64   `json:"user_id"`
+	Status     string  `json:"status"`
+	LastSeenAt *string `json:"last_seen_at,omitempty"`
 }
 
 type messagePayload struct {

@@ -6,6 +6,8 @@ export const WS_FRAME_NEW_MESSAGE = 'new_message'
 export const WS_FRAME_SEND_MESSAGE = 'send_message'
 export const WS_FRAME_READ = 'read'
 export const WS_FRAME_CHAT_UPDATED = 'chat_updated'
+export const WS_FRAME_USER_UPDATED = 'user_updated'
+export const WS_FRAME_PRESENCE = 'presence'
 
 export type WsStatus = 'online' | 'reconnecting'
 
@@ -34,6 +36,19 @@ export type WsChatUpdatedFrame = {
   title: string
 }
 
+export type WsUserUpdatedFrame = {
+  type: typeof WS_FRAME_USER_UPDATED
+  user_id: number
+  login: string
+}
+
+export type WsPresenceFrame = {
+  type: typeof WS_FRAME_PRESENCE
+  user_id: number
+  status: 'online' | 'offline'
+  last_seen_at?: string | null
+}
+
 export type OutgoingMessage = {
   chatId: number
   clientMsgId: string
@@ -46,6 +61,8 @@ type WsHandlers = {
   onNewMessage?: (frame: WsNewMessageFrame) => void
   onRead?: (frame: WsReadFrame) => void
   onChatUpdated?: (frame: WsChatUpdatedFrame) => void
+  onUserUpdated?: (frame: WsUserUpdatedFrame) => void
+  onPresence?: (frame: WsPresenceFrame) => void
 }
 
 const INITIAL_BACKOFF_MS = 1_000
@@ -101,6 +118,28 @@ function isChatUpdatedFrame(value: unknown): value is WsChatUpdatedFrame {
     (value as WsChatUpdatedFrame).type === WS_FRAME_CHAT_UPDATED &&
     typeof (value as WsChatUpdatedFrame).chat_id === 'number' &&
     typeof (value as WsChatUpdatedFrame).title === 'string'
+  )
+}
+
+function isUserUpdatedFrame(value: unknown): value is WsUserUpdatedFrame {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as WsUserUpdatedFrame).type === WS_FRAME_USER_UPDATED &&
+    typeof (value as WsUserUpdatedFrame).user_id === 'number' &&
+    typeof (value as WsUserUpdatedFrame).login === 'string'
+  )
+}
+
+function isPresenceFrame(value: unknown): value is WsPresenceFrame {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const frame = value as WsPresenceFrame
+  return (
+    frame.type === WS_FRAME_PRESENCE &&
+    typeof frame.user_id === 'number' &&
+    (frame.status === 'online' || frame.status === 'offline')
   )
 }
 
@@ -198,6 +237,16 @@ export class MessengerWebSocket {
 
       if (isChatUpdatedFrame(data)) {
         this.handlers.onChatUpdated?.(data)
+        return
+      }
+
+      if (isUserUpdatedFrame(data)) {
+        this.handlers.onUserUpdated?.(data)
+        return
+      }
+
+      if (isPresenceFrame(data)) {
+        this.handlers.onPresence?.(data)
       }
     }
 

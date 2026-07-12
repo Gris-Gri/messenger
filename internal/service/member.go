@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"messenger/internal/domain"
 )
@@ -49,7 +50,38 @@ func (s *Service) ListMembers(ctx context.Context, callerID, chatID int64) ([]do
 		return nil, err
 	}
 
-	return s.members.ListByChat(ctx, chatID)
+	members, err := s.members.ListByChat(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.presence != nil {
+		for i := range members {
+			members[i].Online = s.presence.IsOnline(members[i].UserID)
+		}
+	}
+
+	return members, nil
+}
+
+func (s *Service) NotifyUserConnected(ctx context.Context, userID int64) {
+	if s.notifier == nil {
+		return
+	}
+	s.notifier.NotifyPresence(ctx, userID, "online", nil)
+}
+
+func (s *Service) NotifyUserDisconnected(ctx context.Context, userID int64) error {
+	lastSeen, err := s.users.UpdateLastSeenAt(ctx, userID, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+
+	if s.notifier != nil {
+		s.notifier.NotifyPresence(ctx, userID, "offline", &lastSeen)
+	}
+
+	return nil
 }
 
 func (s *Service) ensureGroupChatAdmin(ctx context.Context, chatID, userID int64) error {

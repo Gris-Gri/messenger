@@ -12,6 +12,7 @@ type Service struct {
 	members    domain.MemberRepository
 	readStates domain.ReadStateRepository
 	notifier   domain.RealtimeNotifier
+	presence   domain.PresenceChecker
 	jwt        *jwt.Manager
 }
 
@@ -33,4 +34,10 @@ func New(
 		notifier:   notifier,
 		jwt:        jwtManager,
 	}
+}
+
+// WithPresence attaches an in-memory presence source (WS hub). Optional; nil means everyone offline.
+func (s *Service) WithPresence(presence domain.PresenceChecker) *Service {
+	s.presence = presence
+	return s
 }

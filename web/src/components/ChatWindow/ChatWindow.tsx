@@ -4,6 +4,7 @@ import { getChatDisplayName } from '../../api/chats'
 import { useActiveChat } from '../../context/ActiveChatContext'
 import { useAuth } from '../../context/AuthContext'
 import { useSidebar } from '../../context/SidebarContext'
+import { useUsers } from '../../context/UsersContext'
 import { useChats } from '../../hooks/useChats'
 import { useMemberNames } from '../../hooks/useMemberNames'
 import { useMessages } from '../../hooks/useMessages'
@@ -49,6 +50,7 @@ function resizeTextarea(element: HTMLTextAreaElement): void {
 
 export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWindowProps) {
   const { currentUser } = useAuth()
+  const { users } = useUsers()
   const { membersPanelRequest } = useActiveChat()
   const { isNarrow, toggleSidebar } = useSidebar()
   const { advanceMyReadCursor } = useChats()
@@ -80,6 +82,10 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
   const lastMembersRequestRef = useRef(0)
 
   const headerTitle = chatTitle ?? 'Выберите чат'
+  const headerLogin =
+    avatarUserId != null
+      ? users[avatarUserId]?.login || chatTitle || ''
+      : chatTitle || ''
   const canSend = chatId !== null && draft.trim().length > 0
 
   useEffect(() => {
@@ -154,8 +160,8 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
             onClick={chatId !== null ? openMembers : undefined}
             disabled={chatId === null}
           >
-            {chatId !== null && avatarUserId !== null && chatTitle && (
-              <Avatar userId={avatarUserId} login={chatTitle} size="sm" />
+            {chatId !== null && avatarUserId !== null && headerLogin && (
+              <Avatar userId={avatarUserId} login={headerLogin} size="sm" />
             )}
             <h1 className={styles.headerTitle}>{headerTitle}</h1>
           </button>
@@ -217,14 +223,23 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
                 {!loading && !error && messages.length === 0 && (
                   <li className={styles.stateMessage}>Нет сообщений</li>
                 )}
-                {messages.map((msg) => {
+                {messages.map((msg, index) => {
                   const isOwn = currentUser?.id === msg.sender_id
-                  const senderName = resolveSenderName(
-                    msg.sender_id,
-                    chatType,
-                    currentUser?.id ?? null,
-                    memberNames,
-                  )
+                  const prev = index > 0 ? messages[index - 1] : null
+                  const isFirstInGroup =
+                    !isOwn && (!prev || prev.sender_id !== msg.sender_id)
+                  const senderName = isFirstInGroup
+                    ? resolveSenderName(
+                        msg.sender_id,
+                        chatType,
+                        currentUser?.id ?? null,
+                        memberNames,
+                      )
+                    : undefined
+                  const senderLogin =
+                    users[msg.sender_id]?.login ||
+                    memberNames[msg.sender_id] ||
+                    `#${msg.sender_id}`
                   const deliveryStatus =
                     isOwn && currentUser
                       ? resolveOwnDeliveryStatus(msg, currentUser.id, readCursors)
@@ -238,21 +253,32 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
                       data-message-id={msg.id > 0 ? msg.id : undefined}
                       className={`${styles.bubbleWrap} ${isOwn ? styles.bubbleWrapOwn : styles.bubbleWrapOther} ${isHighlighted ? styles.bubbleWrapHighlight : ''}`}
                     >
-                      {!isOwn && senderName && (
-                        <span className={styles.senderName}>{senderName}</span>
+                      {!isOwn && (
+                        <div className={styles.avatarSlot}>
+                          {isFirstInGroup ? (
+                            <Avatar userId={msg.sender_id} login={senderLogin} size="sm" />
+                          ) : (
+                            <span className={styles.avatarSpacer} aria-hidden="true" />
+                          )}
+                        </div>
                       )}
-                      <div
-                        className={`${styles.bubble} ${isOwn ? styles.bubbleOwn : styles.bubbleOther}`}
-                      >
-                        {msg.body}
-                      </div>
-                      <div className={styles.meta}>
-                        <span className={styles.timestamp}>
-                          {formatMessageTime(msg.created_at)}
-                        </span>
-                        {showDelivery && deliveryStatus && (
-                          <MessageStatus status={toMessageStatusKind(deliveryStatus)} />
+                      <div className={styles.bubbleColumn}>
+                        {senderName && (
+                          <span className={styles.senderName}>{senderName}</span>
                         )}
+                        <div
+                          className={`${styles.bubble} ${isOwn ? styles.bubbleOwn : styles.bubbleOther}`}
+                        >
+                          {msg.body}
+                        </div>
+                        <div className={styles.meta}>
+                          <span className={styles.timestamp}>
+                            {formatMessageTime(msg.created_at)}
+                          </span>
+                          {showDelivery && deliveryStatus && (
+                            <MessageStatus status={toMessageStatusKind(deliveryStatus)} />
+                          )}
+                        </div>
                       </div>
                     </li>
                   )
@@ -300,7 +326,8 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
 }
 
 export function ConnectedChatWindow() {
-  const { chats, peerNames, peerUserIds } = useChats()
+  const { chats, peerUserIds } = useChats()
+  const { users } = useUsers()
   const { activeChatId } = useActiveChat()
 
   const activeChat = useMemo(
@@ -308,7 +335,12 @@ export function ConnectedChatWindow() {
     [activeChatId, chats],
   )
 
-  const chatTitle = activeChat ? getChatDisplayName(activeChat, peerNames) : null
+  const peerLogin =
+    activeChat?.type === 'direct' && peerUserIds[activeChat.id] != null
+      ? users[peerUserIds[activeChat.id]!]?.login
+      : undefined
+
+  const chatTitle = activeChat ? getChatDisplayName(activeChat, peerLogin) : null
   const avatarUserId = activeChat
     ? activeChat.type === 'direct' && peerUserIds[activeChat.id] != null
       ? peerUserIds[activeChat.id]!

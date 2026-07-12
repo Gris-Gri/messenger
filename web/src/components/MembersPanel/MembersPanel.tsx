@@ -3,9 +3,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { updateChatTitle } from '../../api/chats'
 import { ApiError } from '../../api/errors'
 import { useAuth } from '../../context/AuthContext'
+import { useUsers } from '../../context/UsersContext'
 import { useChatMembers } from '../../hooks/useChatMembers'
 import { useChats } from '../../hooks/useChats'
 import type { User } from '../../types/domain'
+import { formatLastSeen } from '../../utils/formatLastSeen'
 import { UserSearch } from '../UserSearch/UserSearch'
 import styles from './MembersPanel.module.css'
 
@@ -30,7 +32,8 @@ function titleErrorMessage(err: unknown): string {
 
 export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
   const { currentUser } = useAuth()
-  const { chats, peerNames, setChatTitle } = useChats()
+  const { users } = useUsers()
+  const { chats, peerUserIds, setChatTitle } = useChats()
   const {
     members,
     loading,
@@ -48,6 +51,10 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
   )
   const isGroup = chat?.type === 'group'
   const canRename = isGroup && isAdmin
+  const peerLogin =
+    chat?.type === 'direct' && peerUserIds[chat.id] != null
+      ? users[peerUserIds[chat.id]!]?.login
+      : undefined
   const displayTitle = useMemo(() => {
     if (!chat) {
       return 'Участники'
@@ -55,8 +62,8 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
     if (chat.type === 'group') {
       return chat.title?.trim() || `Чат ${chat.id}`
     }
-    return peerNames[chat.id] ?? 'Участники'
-  }, [chat, peerNames])
+    return peerLogin?.trim() || 'Участники'
+  }, [chat, peerLogin])
 
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -144,7 +151,13 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
 
   return (
     <aside
-      className={`${styles.membersPanel} ${open ? styles.open : styles.closed}`}
+      className={[
+        styles.membersPanel,
+        open ? styles.open : styles.closed,
+        open && isGroup ? styles.openGroup : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       aria-label="Участники чата"
       aria-hidden={!open}
     >
@@ -236,24 +249,44 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
           {!loading && members.length === 0 && !error && (
             <li className={styles.stateMessage}>Нет участников</li>
           )}
-          {members.map((member) => (
-            <li key={member.user_id} className={styles.memberItem}>
-              <div className={styles.memberInfo}>
-                <span className={styles.memberLogin}>{member.login}</span>
-                <span className={styles.memberRole}>{member.role}</span>
-              </div>
-              {isAdmin && member.user_id !== currentUser?.id && (
-                <button
-                  type="button"
-                  className={styles.removeBtn}
-                  disabled={actionLoading || !open}
-                  onClick={() => void removeMember(member.user_id)}
-                >
-                  Удалить
-                </button>
-              )}
-            </li>
-          ))}
+          {members.map((member) => {
+            const cached = users[member.user_id]
+            const login = cached?.login || member.login
+            const isSelf = member.user_id === currentUser?.id
+            const online = cached?.online === true
+            const lastSeenLabel =
+              !isSelf && !online
+                ? formatLastSeen(cached?.last_seen_at ?? member.last_seen_at)
+                : null
+
+            return (
+              <li key={member.user_id} className={styles.memberItem}>
+                <span className={styles.memberLogin}>{login}</span>
+                <div className={styles.memberMetaRow}>
+                  <span className={styles.memberRole}>{member.role}</span>
+                  {isAdmin && !isSelf && (
+                    <button
+                      type="button"
+                      className={styles.removeBtn}
+                      disabled={actionLoading || !open}
+                      onClick={() => void removeMember(member.user_id)}
+                    >
+                      Удалить
+                    </button>
+                  )}
+                </div>
+                {!isSelf && online && (
+                  <span className={styles.presenceOnline}>
+                    <span className={styles.presenceDot} aria-hidden="true" />
+                    online
+                  </span>
+                )}
+                {!isSelf && !online && lastSeenLabel && (
+                  <span className={styles.presenceOffline}>{lastSeenLabel}</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       </div>
     </aside>

@@ -11,6 +11,7 @@ import {
 import { fetchChats } from '../api/chats'
 import { fetchChatMembers } from '../api/members'
 import { useAuth } from '../context/AuthContext'
+import { membersToUpserts, useUsers } from '../context/UsersContext'
 import type { Chat, ChatListItem } from '../types/domain'
 
 type ReloadChatsOptions = {
@@ -20,8 +21,7 @@ type ReloadChatsOptions = {
 
 type ChatsContextValue = {
   chats: ChatListItem[]
-  peerNames: Record<number, string>
-  /** chatId → peer userId для direct-чатов (цвет аватара). */
+  /** chatId → peer userId для direct-чатов (логин/аватар из Users store). */
   peerUserIds: Record<number, number>
   loading: boolean
   error: string | null
@@ -74,57 +74,73 @@ function chatToListItem(chat: Chat): ChatListItem {
   }
 }
 
-async function loadPeers(
+async function loadPeerUserIds(
   items: ChatListItem[],
   currentUserId: number,
-): Promise<{ names: Record<number, string>; userIds: Record<number, number> }> {
+): Promise<{
+  userIds: Record<number, number>
+  membersByChat: Awaited<ReturnType<typeof fetchChatMembers>>[]
+}> {
   const directChats = items.filter((chat) => chat.type === 'direct' && !chat.title)
   if (directChats.length === 0) {
-    return { names: {}, userIds: {} }
+    return { userIds: {}, membersByChat: [] }
   }
 
-  const entries = await Promise.all(
+  const results = await Promise.all(
     directChats.map(async (chat) => {
       try {
         const members = await fetchChatMembers(chat.id)
         const peer = members.find((member) => member.user_id !== currentUserId)
-        return peer
-          ? ([chat.id, peer.login, peer.user_id] as const)
-          : null
+        return { chatId: chat.id, peer, members }
       } catch {
         return null
       }
     }),
   )
 
-  const names: Record<number, string> = {}
   const userIds: Record<number, number> = {}
-  for (const entry of entries) {
-    if (entry) {
-      names[entry[0]] = entry[1]
-      userIds[entry[0]] = entry[2]
+  const membersByChat: Awaited<ReturnType<typeof fetchChatMembers>>[] = []
+  for (const entry of results) {
+    if (!entry) {
+      continue
+    }
+    membersByChat.push(entry.members)
+    if (entry.peer) {
+      userIds[entry.chatId] = entry.peer.user_id
     }
   }
-  return { names, userIds }
+  return { userIds, membersByChat }
 }
 
 export function ChatsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, currentUser } = useAuth()
+  const { upsertUsers } = useUsers()
   const [chats, setChats] = useState<ChatListItem[]>([])
-  const [peerNames, setPeerNames] = useState<Record<number, string>>({})
   const [peerUserIds, setPeerUserIds] = useState<Record<number, number>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const chatsRef = useRef(chats)
   const refreshInFlightRef = useRef<Promise<void> | null>(null)
+  const upsertUsersRef = useRef(upsertUsers)
 
   chatsRef.current = chats
+  upsertUsersRef.current = upsertUsers
+
+  const applyPeers = useCallback(
+    async (items: ChatListItem[], userId: number) => {
+      const peers = await loadPeerUserIds(items, userId)
+      setPeerUserIds((prev) => ({ ...prev, ...peers.userIds }))
+      for (const members of peers.membersByChat) {
+        upsertUsersRef.current(membersToUpserts(members))
+      }
+    },
+    [],
+  )
 
   const reloadChats = useCallback(
     async (options?: ReloadChatsOptions) => {
       if (!isAuthenticated || !currentUser) {
         setChats([])
-        setPeerNames({})
         setPeerUserIds({})
         return
       }
@@ -143,9 +159,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         try {
           const items = await fetchChats()
           setChats(items)
-          const peers = await loadPeers(items, currentUser.id)
-          setPeerNames(peers.names)
-          setPeerUserIds(peers.userIds)
+          await applyPeers(items, currentUser.id)
         } catch (err: unknown) {
           setError(err instanceof Error ? err.message : 'Не удалось загрузить чаты')
         } finally {
@@ -160,13 +174,12 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       })
       return refreshInFlightRef.current
     },
-    [currentUser, isAuthenticated],
+    [applyPeers, currentUser, isAuthenticated],
   )
 
   useEffect(() => {
     if (!isAuthenticated) {
       setChats([])
-      setPeerNames({})
       setPeerUserIds({})
       setLoading(false)
       setError(null)
@@ -185,13 +198,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         }
         setChats(items)
         if (currentUser) {
-          const peers = await loadPeers(items, currentUser.id)
-          if (!cancelled) {
-            setPeerNames(peers.names)
-            setPeerUserIds(peers.userIds)
-          }
+          await applyPeers(items, currentUser.id)
         } else {
-          setPeerNames({})
           setPeerUserIds({})
         }
       } catch (err: unknown) {
@@ -208,7 +216,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [currentUser, isAuthenticated])
+  }, [applyPeers, currentUser, isAuthenticated])
 
   const updateChatPreview = useCallback(
     (
@@ -283,24 +291,18 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       })
 
       if (peer) {
-        setPeerNames((prev) => ({ ...prev, [chat.id]: peer.login }))
         setPeerUserIds((prev) => ({ ...prev, [chat.id]: peer.userId }))
+        upsertUsersRef.current([
+          { user_id: peer.userId, login: peer.login },
+        ])
         return
       }
 
       if (chat.type === 'direct' && currentUser) {
-        void (async () => {
-          const peers = await loadPeers([item], currentUser.id)
-          if (peers.names[chat.id]) {
-            setPeerNames((prev) => ({ ...prev, [chat.id]: peers.names[chat.id] }))
-          }
-          if (peers.userIds[chat.id] != null) {
-            setPeerUserIds((prev) => ({ ...prev, [chat.id]: peers.userIds[chat.id] }))
-          }
-        })()
+        void applyPeers([item], currentUser.id)
       }
     },
-    [currentUser],
+    [applyPeers, currentUser],
   )
 
   const ensureChatFromMessage = useCallback(
@@ -316,7 +318,6 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       chats,
-      peerNames,
       peerUserIds,
       loading,
       error,
@@ -333,7 +334,6 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       error,
       ensureChatFromMessage,
       loading,
-      peerNames,
       peerUserIds,
       reloadChats,
       setChatTitle,

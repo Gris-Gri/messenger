@@ -188,28 +188,63 @@
   margin: 0;
   min-height: 0;
   background: transparent;
+  scrollbar-width: none;
+}
+
+.messageList::-webkit-scrollbar {
+  display: none;
 }
 
 .bubbleWrap {
   display: flex;
-  flex-direction: column;
-  max-width: 65%;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 72%;
   animation: messageIn 180ms ease-out both;
 }
 
 .bubbleWrapOwn {
   align-self: flex-end;
-  align-items: flex-end;
+  flex-direction: row-reverse;
 }
 
 .bubbleWrapOther {
   align-self: flex-start;
-  align-items: flex-start;
 }
 
 .bubbleWrapHighlight .bubble {
   outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
   outline-offset: 2px;
+}
+
+.avatarSlot {
+  flex-shrink: 0;
+  width: 42px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.avatarSpacer {
+  display: block;
+  width: 42px;
+  height: 42px;
+}
+
+.bubbleColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bubbleWrapOwn .bubbleColumn {
+  align-items: flex-end;
+}
+
+.bubbleWrapOther .bubbleColumn {
+  align-items: flex-start;
 }
 
 .senderName {
@@ -255,12 +290,20 @@
   color: var(--text-secondary);
 }
 
-/* Layout only — border/bg/height/padding from global .chromeBar */
+/* Overrides solid .chromeBar fill — glass only on the composer, not the sidebar footer */
 .inputArea {
   gap: 12px;
   align-items: flex-end;
   /* Grow with multiline draft; .chromeBar sets the shared base height */
   height: auto;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  /* Left edge omitted: vertical divider is sidebar footer border-right (--border) */
+  border-top: 1px solid var(--glass-border);
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  border-left: none;
 }
 
 .textarea {

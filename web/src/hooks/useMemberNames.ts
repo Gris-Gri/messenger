@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchChatMembers } from '../api/members'
+import { membersToUpserts, useUsers } from '../context/UsersContext'
 import type { ChatType, User } from '../types/domain'
 
+/**
+ * Имена участников группы для ленты/поиска.
+ * Источник истины — Users store; локально держим только список user_id чата.
+ */
 export function useMemberNames(
   chatId: number | null,
   chatType: ChatType | null,
   currentUser: User | null,
 ): Record<number, string> {
-  const [fetchedNames, setFetchedNames] = useState<Record<number, string>>({})
+  const { users, upsertUsers } = useUsers()
+  const [memberIds, setMemberIds] = useState<number[]>([])
 
   useEffect(() => {
     if (chatId === null || chatType !== 'group') {
-      setFetchedNames({})
+      setMemberIds([])
       return
     }
 
@@ -22,33 +28,35 @@ export function useMemberNames(
         if (cancelled) {
           return
         }
-
-        const next: Record<number, string> = {}
-        for (const member of members) {
-          next[member.user_id] = member.login
-        }
-        setFetchedNames(next)
+        upsertUsers(membersToUpserts(members))
+        setMemberIds(members.map((member) => member.user_id))
       })
       .catch(() => {
         if (!cancelled) {
-          setFetchedNames({})
+          setMemberIds([])
         }
       })
 
     return () => {
       cancelled = true
     }
-  }, [chatId, chatType])
+  }, [chatId, chatType, upsertUsers])
 
   return useMemo(() => {
     if (chatType !== 'group') {
       return {}
     }
 
-    const names = { ...fetchedNames }
+    const names: Record<number, string> = {}
+    for (const id of memberIds) {
+      const login = users[id]?.login
+      if (login) {
+        names[id] = login
+      }
+    }
     if (currentUser) {
-      names[currentUser.id] = currentUser.login
+      names[currentUser.id] = users[currentUser.id]?.login || currentUser.login
     }
     return names
-  }, [chatType, currentUser, fetchedNames])
+  }, [chatType, currentUser, memberIds, users])
 }

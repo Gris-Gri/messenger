@@ -4,6 +4,7 @@ import { getChatDisplayName } from '../../api/chats'
 import { useActiveChat } from '../../context/ActiveChatContext'
 import { useAuth } from '../../context/AuthContext'
 import { useSidebar } from '../../context/SidebarContext'
+import { useUsers } from '../../context/UsersContext'
 import { useChats } from '../../hooks/useChats'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { chatHasUnread } from '../../utils/deliveryStatus'
@@ -42,7 +43,8 @@ function AppLogo() {
 
 export function Sidebar({ onOpenProfile }: SidebarProps) {
   const { currentUser } = useAuth()
-  const { chats, loading, error, peerNames, peerUserIds } = useChats()
+  const { chats, loading, error, peerUserIds } = useChats()
+  const { users } = useUsers()
   const { activeChatId, setActiveChatId } = useActiveChat()
   const { status } = useWebSocket()
   const { isNarrow, sidebarOpen, closeSidebar } = useSidebar()
@@ -51,15 +53,24 @@ export function Sidebar({ onOpenProfile }: SidebarProps) {
 
   const isOnline = status === 'online'
 
+  const resolvePeerLogin = (chatId: number): string | undefined => {
+    const peerId = peerUserIds[chatId]
+    if (peerId == null) {
+      return undefined
+    }
+    return users[peerId]?.login
+  }
+
   const filteredChats = useMemo(() => {
     const query = search.trim().toLowerCase()
     if (!query) {
       return chats
     }
     return chats.filter((chat) =>
-      getChatDisplayName(chat, peerNames).toLowerCase().includes(query),
+      getChatDisplayName(chat, resolvePeerLogin(chat.id)).toLowerCase().includes(query),
     )
-  }, [chats, peerNames, search])
+    // resolvePeerLogin closes over users/peerUserIds — include them
+  }, [chats, peerUserIds, search, users])
 
   useEffect(() => {
     if (filteredChats.length === 0) {
@@ -78,6 +89,10 @@ export function Sidebar({ onOpenProfile }: SidebarProps) {
       closeSidebar()
     }
   }
+
+  const profileLogin = currentUser
+    ? users[currentUser.id]?.login || currentUser.login
+    : 'Профиль'
 
   return (
     <aside
@@ -130,7 +145,7 @@ export function Sidebar({ onOpenProfile }: SidebarProps) {
               {!error &&
                 filteredChats.map((chat) => {
                   const unread = chatHasUnread(chat)
-                  const name = getChatDisplayName(chat, peerNames)
+                  const name = getChatDisplayName(chat, resolvePeerLogin(chat.id))
                   const avatarId =
                     chat.type === 'direct' && peerUserIds[chat.id] != null
                       ? peerUserIds[chat.id]!
@@ -180,11 +195,9 @@ export function Sidebar({ onOpenProfile }: SidebarProps) {
             aria-label="Открыть профиль"
           >
             {currentUser && (
-              <Avatar userId={currentUser.id} login={currentUser.login} size="sm" />
+              <Avatar userId={currentUser.id} login={profileLogin} size="sm" />
             )}
-            <span className={styles.profileLogin}>
-              {currentUser?.login ?? 'Профиль'}
-            </span>
+            <span className={styles.profileLogin}>{profileLogin}</span>
           </button>
           <div className={styles.connection}>
             <span

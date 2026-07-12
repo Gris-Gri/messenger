@@ -7,7 +7,6 @@
   min-width: var(--sidebar-width);
   height: 100%;
   background: var(--bg-sidebar);
-  /* No full-height border-right — would cut the shared chrome strip */
   border-right: none;
 }
 
@@ -263,11 +262,13 @@
   white-space: nowrap;
 }
 
-/* Layout/spacing only — border/bg/height live in global .chromeBar */
+/* Layout/spacing only — border/bg/height live in global .chromeBar.
+ * border-right continues the sidebar/chat divider through the chrome strip. */
 .footer {
   font-family: var(--font-mono);
   font-size: var(--font-size-2xs);
   color: var(--text-secondary);
+  border-right: 1px solid var(--border);
 }
 
 .profileCard {

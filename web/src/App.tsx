@@ -4,6 +4,7 @@ import { ConnectedChatWindow } from './components/ChatWindow/ChatWindow'
 import { ActiveChatProvider } from './context/ActiveChatContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SidebarProvider, useSidebar } from './context/SidebarContext'
+import { UsersProvider } from './context/UsersContext'
 import { ChatsProvider, useChats } from './hooks/useChats'
 import { WebSocketProvider } from './hooks/useWebSocket'
 import { Login } from './screens/Login/Login'
@@ -55,18 +56,20 @@ function MessengerLayout({ onOpenProfile }: { onOpenProfile: () => void }) {
 function AuthenticatedApp() {
   const [screen, setScreen] = useState<AppScreen>('chats')
 
-  if (screen === 'profile') {
-    return <Profile onBack={() => setScreen('chats')} />
-  }
-
   return (
-    <ActiveChatProvider>
-      <ChatsProvider>
-        <SidebarProvider>
-          <MessengerLayout onOpenProfile={() => setScreen('profile')} />
-        </SidebarProvider>
-      </ChatsProvider>
-    </ActiveChatProvider>
+    <UsersProvider>
+      {screen === 'profile' ? (
+        <Profile onBack={() => setScreen('chats')} />
+      ) : (
+        <ActiveChatProvider>
+          <ChatsProvider>
+            <SidebarProvider>
+              <MessengerLayout onOpenProfile={() => setScreen('profile')} />
+            </SidebarProvider>
+          </ChatsProvider>
+        </ActiveChatProvider>
+      )}
+    </UsersProvider>
   )
 }
 

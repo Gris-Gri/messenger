@@ -15,11 +15,14 @@ import {
   type WsAckFrame,
   type WsChatUpdatedFrame,
   type WsNewMessageFrame,
+  type WsPresenceFrame,
   type WsReadFrame,
   type WsStatus,
+  type WsUserUpdatedFrame,
 } from '../api/ws'
 import { useActiveChat } from '../context/ActiveChatContext'
 import { useAuth } from '../context/AuthContext'
+import { useUsers } from '../context/UsersContext'
 import type { DisplayMessage } from '../types/domain'
 import { createClientMsgId } from '../utils/clientMsgId'
 
@@ -69,6 +72,7 @@ export function WebSocketProvider({
 }: WebSocketProviderProps) {
   const { isAuthenticated, currentUser } = useAuth()
   const { activeChatId } = useActiveChat()
+  const { updateLogin, updatePresence } = useUsers()
   const [status, setStatus] = useState<WsStatus>('reconnecting')
   const clientRef = useRef<MessengerWebSocket | null>(null)
   const chatHandlersRef = useRef<ChatMessageHandlers | null>(null)
@@ -80,12 +84,16 @@ export function WebSocketProvider({
   const setChatTitleRef = useRef(setChatTitle)
   const advanceMyReadCursorRef = useRef(advanceMyReadCursor)
   const ensureChatFromMessageRef = useRef(ensureChatFromMessage)
+  const updateLoginRef = useRef(updateLogin)
+  const updatePresenceRef = useRef(updatePresence)
 
   activeChatIdRef.current = activeChatId
   updateChatPreviewRef.current = updateChatPreview
   setChatTitleRef.current = setChatTitle
   advanceMyReadCursorRef.current = advanceMyReadCursor
   ensureChatFromMessageRef.current = ensureChatFromMessage
+  updateLoginRef.current = updateLogin
+  updatePresenceRef.current = updatePresence
 
   const registerChatHandlers = useCallback((handlers: ChatMessageHandlers | null) => {
     chatHandlersRef.current = handlers
@@ -179,6 +187,16 @@ export function WebSocketProvider({
       },
       onChatUpdated: (frame: WsChatUpdatedFrame) => {
         setChatTitleRef.current(frame.chat_id, frame.title)
+      },
+      onUserUpdated: (frame: WsUserUpdatedFrame) => {
+        updateLoginRef.current(frame.user_id, frame.login)
+      },
+      onPresence: (frame: WsPresenceFrame) => {
+        updatePresenceRef.current(
+          frame.user_id,
+          frame.status,
+          frame.last_seen_at ?? null,
+        )
       },
     })
 

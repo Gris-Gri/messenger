@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"messenger/internal/domain"
 )
@@ -63,6 +64,52 @@ func (n *HubReadNotifier) NotifyChatUpdated(ctx context.Context, chatID, actorUs
 	}
 
 	n.hub.BroadcastChatUpdated(chatID, actorUserID, payload, memberIDs)
+}
+
+func (n *HubReadNotifier) NotifyUserUpdated(ctx context.Context, userID int64, login string) {
+	recipientIDs, err := n.members.ListSharedChatUserIDs(ctx, userID)
+	if err != nil {
+		n.logger.Warn("user_updated broadcast skipped", "err", err, "user_id", userID)
+		return
+	}
+
+	frame := userUpdatedFrame{
+		Type:   FrameTypeUserUpdated,
+		UserID: userID,
+		Login:  login,
+	}
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		n.logger.Warn("user_updated broadcast marshal failed", "err", err, "user_id", userID)
+		return
+	}
+
+	n.hub.BroadcastToUsers(payload, recipientIDs)
+}
+
+func (n *HubReadNotifier) NotifyPresence(ctx context.Context, userID int64, status string, lastSeenAt *time.Time) {
+	recipientIDs, err := n.members.ListSharedChatUserIDs(ctx, userID)
+	if err != nil {
+		n.logger.Warn("presence broadcast skipped", "err", err, "user_id", userID)
+		return
+	}
+
+	frame := presenceFrame{
+		Type:   FrameTypePresence,
+		UserID: userID,
+		Status: status,
+	}
+	if lastSeenAt != nil {
+		formatted := formatTime(*lastSeenAt)
+		frame.LastSeenAt = &formatted
+	}
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		n.logger.Warn("presence broadcast marshal failed", "err", err, "user_id", userID)
+		return
+	}
+
+	n.hub.BroadcastToUsers(payload, recipientIDs)
 }
 
 var _ domain.RealtimeNotifier = (*HubReadNotifier)(nil)

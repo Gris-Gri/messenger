@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import * as profileApi from '../../api/profile'
 import { ApiError } from '../../api/errors'
 import { useAuth } from '../../context/AuthContext'
+import { useUsers } from '../../context/UsersContext'
 import type { MeUser } from '../../types/domain'
 import { formatRegistrationDate } from '../../utils/formatRegistrationDate'
 import { Avatar } from '../../components/Avatar/Avatar'
@@ -13,6 +14,7 @@ type ProfileProps = {
 
 export function Profile({ onBack }: ProfileProps) {
   const { currentUser, logout, patchCurrentUser } = useAuth()
+  const { updateLogin: updateStoredLogin } = useUsers()
   const [me, setMe] = useState<MeUser | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -46,6 +48,7 @@ export function Profile({ onBack }: ProfileProps) {
         setMe(data)
         setLoginDraft(data.login)
         patchCurrentUser({ id: data.id, login: data.login })
+        updateStoredLogin(data.id, data.login)
       } catch (err: unknown) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить профиль')
@@ -59,7 +62,7 @@ export function Profile({ onBack }: ProfileProps) {
     return () => {
       cancelled = true
     }
-  }, [patchCurrentUser])
+  }, [patchCurrentUser, updateStoredLogin])
 
   const displayLogin = me?.login ?? currentUser?.login ?? ''
   const displayId = me?.id ?? currentUser?.id ?? 0
@@ -94,6 +97,7 @@ export function Profile({ onBack }: ProfileProps) {
       const updated = await profileApi.updateLogin(next)
       setMe(updated)
       patchCurrentUser({ id: updated.id, login: updated.login })
+      updateStoredLogin(updated.id, updated.login)
       setEditingLogin(false)
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 'conflict') {

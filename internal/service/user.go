@@ -49,6 +49,11 @@ func (s *Service) UpdateLogin(ctx context.Context, userID int64, login string) (
 		return nil, err
 	}
 	user.PasswordHash = ""
+
+	if s.notifier != nil {
+		s.notifier.NotifyUserUpdated(ctx, user.ID, user.Login)
+	}
+
 	return user, nil
 }
 
