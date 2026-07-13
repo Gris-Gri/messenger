@@ -112,4 +112,53 @@ func (n *HubReadNotifier) NotifyPresence(ctx context.Context, userID int64, stat
 	n.hub.BroadcastToUsers(payload, recipientIDs)
 }
 
+func (n *HubReadNotifier) NotifyMessageEdited(ctx context.Context, chatID, messageID int64, body string, editedAt time.Time) {
+	memberIDs, err := n.members.ListUserIDs(ctx, chatID)
+	if err != nil {
+		n.logger.Warn("message_edited broadcast skipped", "err", err, "chat_id", chatID)
+		return
+	}
+
+	frame := messageEditedFrame{
+		Type:      FrameTypeMessageEdited,
+		ChatID:    chatID,
+		MessageID: messageID,
+		Body:      body,
+		EditedAt:  formatTime(editedAt),
+	}
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		n.logger.Warn("message_edited broadcast marshal failed", "err", err, "chat_id", chatID)
+		return
+	}
+
+	n.hub.BroadcastToUsers(payload, memberIDs)
+}
+
+func (n *HubReadNotifier) NotifyReactionUpdated(ctx context.Context, chatID, messageID int64, counts domain.ReactionCounts) {
+	memberIDs, err := n.members.ListUserIDs(ctx, chatID)
+	if err != nil {
+		n.logger.Warn("reaction_updated broadcast skipped", "err", err, "chat_id", chatID)
+		return
+	}
+
+	frame := reactionUpdatedFrame{
+		Type:      FrameTypeReactionUpdated,
+		ChatID:    chatID,
+		MessageID: messageID,
+		Reactions: reactionCountsPayload{
+			Like:    counts.Like,
+			Dislike: counts.Dislike,
+			Heart:   counts.Heart,
+		},
+	}
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		n.logger.Warn("reaction_updated broadcast marshal failed", "err", err, "chat_id", chatID)
+		return
+	}
+
+	n.hub.BroadcastToUsers(payload, memberIDs)
+}
+
 var _ domain.RealtimeNotifier = (*HubReadNotifier)(nil)

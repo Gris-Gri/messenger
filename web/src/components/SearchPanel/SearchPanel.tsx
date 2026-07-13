@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toUserMessage } from '../../api/errors'
 import { searchMessages } from '../../api/search'
 import type { Message } from '../../types/domain'
 import { formatMessageTime } from '../../utils/formatMessageTime'
@@ -49,7 +50,7 @@ export function SearchPanel({
         .catch((err: unknown) => {
           if (!cancelled) {
             setResults([])
-            setError(err instanceof Error ? err.message : 'Ошибка поиска')
+            setError(toUserMessage(err, 'Ошибка поиска'))
           }
         })
         .finally(() => {

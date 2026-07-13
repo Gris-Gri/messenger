@@ -4,7 +4,7 @@ import {
   getRefreshToken,
   refresh,
 } from './auth'
-import { parseApiError } from './errors'
+import { ApiError, parseApiError } from './errors'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -25,7 +25,9 @@ export function configureClient(config: { onSessionExpired: () => void }): void 
 
 function tryRefresh(): Promise<string> {
   if (!getRefreshToken()) {
-    return Promise.reject(new Error('no refresh token'))
+    return Promise.reject(
+      new ApiError(401, 'unauthorized', 'Не авторизован'),
+    )
   }
   if (!refreshPromise) {
     refreshPromise = refresh().finally(() => {
@@ -61,10 +63,15 @@ export async function apiClient<T>(
     requestHeaders['Content-Type'] = 'application/json'
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: requestHeaders,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: requestHeaders,
+    })
+  } catch {
+    throw new ApiError(0, 'network_error', 'Не удалось связаться с сервером')
+  }
 
   if (response.status === 401 && !skipAuth && !_retried) {
     try {

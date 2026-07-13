@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { createDirectChat, createGroupChat } from '../../api/chats'
+import { toUserMessage } from '../../api/errors'
 import { useActiveChat } from '../../context/ActiveChatContext'
 import { useSidebar } from '../../context/SidebarContext'
 import { useChats } from '../../hooks/useChats'
@@ -74,7 +75,7 @@ export function CreateChatModal({ open, onClose }: CreateChatModalProps) {
       upsertCreatedChat(chat, { login: user.login, userId: user.id })
       openCreatedChat(chat.id, false)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать чат')
+      setError(toUserMessage(err, 'Не удалось создать чат'))
     } finally {
       setSubmitting(false)
     }
@@ -95,7 +96,7 @@ export function CreateChatModal({ open, onClose }: CreateChatModalProps) {
       upsertCreatedChat(chat)
       openCreatedChat(chat.id, true)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать группу')
+      setError(toUserMessage(err, 'Не удалось создать группу'))
     } finally {
       setSubmitting(false)
     }
@@ -167,7 +168,11 @@ export function CreateChatModal({ open, onClose }: CreateChatModalProps) {
           )}
 
           {tab === 'group' && (
-            <form className={styles.panel} onSubmit={(event) => void handleCreateGroup(event)}>
+            <form
+              className={styles.panel}
+              onSubmit={(event) => void handleCreateGroup(event)}
+              noValidate
+            >
               <label className={styles.label} htmlFor="group-title">
                 Название группы
               </label>
@@ -180,7 +185,6 @@ export function CreateChatModal({ open, onClose }: CreateChatModalProps) {
                 placeholder="Название…"
                 disabled={submitting}
                 autoFocus
-                required
               />
               <button
                 type="submit"

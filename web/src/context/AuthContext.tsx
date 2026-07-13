@@ -8,7 +8,7 @@ import {
 } from 'react'
 import * as authApi from '../api/auth'
 import { configureClient } from '../api/client'
-import { ApiError } from '../api/errors'
+import { ApiError, toUserMessage } from '../api/errors'
 import type { User } from '../types/domain'
 
 type AuthContextValue = {
@@ -87,7 +87,7 @@ export function mapAuthError(
   mode: 'login' | 'register',
 ): { login?: string; password?: string } {
   if (!(err instanceof ApiError)) {
-    return { login: 'Не удалось связаться с сервером' }
+    return { login: toUserMessage(err, 'Не удалось связаться с сервером') }
   }
 
   if (err.code === 'conflict') {
@@ -104,5 +104,9 @@ export function mapAuthError(
       : { login: 'Введите логин и пароль' }
   }
 
-  return { login: err.message || 'Ошибка запроса' }
+  if (err.code === 'network_error') {
+    return { login: 'Не удалось связаться с сервером' }
+  }
+
+  return { login: toUserMessage(err, 'Ошибка запроса') }
 }

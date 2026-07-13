@@ -1,5 +1,5 @@
 import { getAccessToken } from './auth'
-import type { Message } from '../types/domain'
+import type { Message, ReactionCounts } from '../types/domain'
 
 export const WS_FRAME_ACK = 'ack'
 export const WS_FRAME_NEW_MESSAGE = 'new_message'
@@ -8,6 +8,8 @@ export const WS_FRAME_READ = 'read'
 export const WS_FRAME_CHAT_UPDATED = 'chat_updated'
 export const WS_FRAME_USER_UPDATED = 'user_updated'
 export const WS_FRAME_PRESENCE = 'presence'
+export const WS_FRAME_MESSAGE_EDITED = 'message_edited'
+export const WS_FRAME_REACTION_UPDATED = 'reaction_updated'
 
 export type WsStatus = 'online' | 'reconnecting'
 
@@ -49,6 +51,21 @@ export type WsPresenceFrame = {
   last_seen_at?: string | null
 }
 
+export type WsMessageEditedFrame = {
+  type: typeof WS_FRAME_MESSAGE_EDITED
+  chat_id: number
+  message_id: number
+  body: string
+  edited_at: string
+}
+
+export type WsReactionUpdatedFrame = {
+  type: typeof WS_FRAME_REACTION_UPDATED
+  chat_id: number
+  message_id: number
+  reactions: ReactionCounts
+}
+
 export type OutgoingMessage = {
   chatId: number
   clientMsgId: string
@@ -63,6 +80,8 @@ type WsHandlers = {
   onChatUpdated?: (frame: WsChatUpdatedFrame) => void
   onUserUpdated?: (frame: WsUserUpdatedFrame) => void
   onPresence?: (frame: WsPresenceFrame) => void
+  onMessageEdited?: (frame: WsMessageEditedFrame) => void
+  onReactionUpdated?: (frame: WsReactionUpdatedFrame) => void
 }
 
 const INITIAL_BACKOFF_MS = 1_000
@@ -140,6 +159,35 @@ function isPresenceFrame(value: unknown): value is WsPresenceFrame {
     frame.type === WS_FRAME_PRESENCE &&
     typeof frame.user_id === 'number' &&
     (frame.status === 'online' || frame.status === 'offline')
+  )
+}
+
+function isMessageEditedFrame(value: unknown): value is WsMessageEditedFrame {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as WsMessageEditedFrame).type === WS_FRAME_MESSAGE_EDITED &&
+    typeof (value as WsMessageEditedFrame).chat_id === 'number' &&
+    typeof (value as WsMessageEditedFrame).message_id === 'number' &&
+    typeof (value as WsMessageEditedFrame).body === 'string' &&
+    typeof (value as WsMessageEditedFrame).edited_at === 'string'
+  )
+}
+
+function isReactionUpdatedFrame(value: unknown): value is WsReactionUpdatedFrame {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const frame = value as WsReactionUpdatedFrame
+  return (
+    frame.type === WS_FRAME_REACTION_UPDATED &&
+    typeof frame.chat_id === 'number' &&
+    typeof frame.message_id === 'number' &&
+    typeof frame.reactions === 'object' &&
+    frame.reactions !== null &&
+    typeof frame.reactions.like === 'number' &&
+    typeof frame.reactions.dislike === 'number' &&
+    typeof frame.reactions.heart === 'number'
   )
 }
 
@@ -247,6 +295,16 @@ export class MessengerWebSocket {
 
       if (isPresenceFrame(data)) {
         this.handlers.onPresence?.(data)
+        return
+      }
+
+      if (isMessageEditedFrame(data)) {
+        this.handlers.onMessageEdited?.(data)
+        return
+      }
+
+      if (isReactionUpdatedFrame(data)) {
+        this.handlers.onReactionUpdated?.(data)
       }
     }
 

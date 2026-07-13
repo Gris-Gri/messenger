@@ -33,12 +33,7 @@ func (h *Handler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]messageResponse, 0, len(messages))
 	for _, msg := range messages {
-		resp = append(resp, messageResponse{
-			ID:        msg.ID,
-			SenderID:  msg.SenderID,
-			Body:      msg.Body,
-			CreatedAt: msg.CreatedAt.UTC().Format(timeRFC3339Nano),
-		})
+		resp = append(resp, toMessageResponse(msg))
 	}
 
 	h.writeJSON(w, http.StatusOK, resp)

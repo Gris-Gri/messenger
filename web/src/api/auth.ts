@@ -99,11 +99,16 @@ async function postJson<T>(path: string, body: unknown, bearer?: string): Promis
     headers.Authorization = `Bearer ${bearer}`
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError(0, 'network_error', 'Не удалось связаться с сервером')
+  }
 
   if (!response.ok) {
     throw await parseApiError(response)
@@ -137,7 +142,7 @@ export async function login(loginValue: string, password: string): Promise<Token
 export async function refresh(): Promise<string> {
   const currentRefresh = getRefreshToken()
   if (!currentRefresh) {
-    throw new ApiError(401, 'unauthorized', 'No refresh token')
+    throw new ApiError(401, 'unauthorized', 'Не авторизован')
   }
 
   const data = await postJson<{ access_token: string }>(

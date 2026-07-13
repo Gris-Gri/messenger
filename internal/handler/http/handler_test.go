@@ -195,19 +195,47 @@ func (m *mockChatRepo) ListByUser(ctx context.Context, userID int64) ([]domain.C
 }
 
 type mockMessageRepo struct {
-	createFn     func(ctx context.Context, msg *domain.Message) (*domain.Message, error)
-	listByChatFn func(ctx context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error)
-	searchFn     func(ctx context.Context, chatID int64, query string) ([]domain.Message, error)
+	createFn               func(ctx context.Context, msg *domain.Message) (*domain.Message, error)
+	getByIDFn              func(ctx context.Context, messageID int64) (*domain.Message, error)
+	updateMessageBodyFn    func(ctx context.Context, messageID, senderID int64, newBody string) (*domain.Message, error)
+	listByChatFn           func(ctx context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error)
+	searchFn               func(ctx context.Context, chatID int64, query string) ([]domain.Message, error)
+	toggleReactionFn       func(ctx context.Context, messageID, userID int64, reaction string) (domain.ReactionSummary, error)
+	getReactionSummariesFn func(ctx context.Context, messageIDs []int64, viewerID int64) (map[int64]domain.ReactionSummary, error)
 }
 
 func (m *mockMessageRepo) Create(ctx context.Context, msg *domain.Message) (*domain.Message, error) {
 	return m.createFn(ctx, msg)
+}
+func (m *mockMessageRepo) GetByID(ctx context.Context, messageID int64) (*domain.Message, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, messageID)
+	}
+	return nil, domain.ErrNotFound
+}
+func (m *mockMessageRepo) UpdateMessageBody(ctx context.Context, messageID, senderID int64, newBody string) (*domain.Message, error) {
+	if m.updateMessageBodyFn != nil {
+		return m.updateMessageBodyFn(ctx, messageID, senderID, newBody)
+	}
+	return nil, domain.ErrNotFound
 }
 func (m *mockMessageRepo) ListByChat(ctx context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error) {
 	return m.listByChatFn(ctx, chatID, beforeID, limit)
 }
 func (m *mockMessageRepo) Search(ctx context.Context, chatID int64, query string) ([]domain.Message, error) {
 	return m.searchFn(ctx, chatID, query)
+}
+func (m *mockMessageRepo) ToggleReaction(ctx context.Context, messageID, userID int64, reaction string) (domain.ReactionSummary, error) {
+	if m.toggleReactionFn != nil {
+		return m.toggleReactionFn(ctx, messageID, userID, reaction)
+	}
+	return domain.ReactionSummary{}, nil
+}
+func (m *mockMessageRepo) GetReactionSummaries(ctx context.Context, messageIDs []int64, viewerID int64) (map[int64]domain.ReactionSummary, error) {
+	if m.getReactionSummariesFn != nil {
+		return m.getReactionSummariesFn(ctx, messageIDs, viewerID)
+	}
+	return map[int64]domain.ReactionSummary{}, nil
 }
 
 type mockMemberRepo struct {

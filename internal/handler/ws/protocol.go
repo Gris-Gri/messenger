@@ -3,13 +3,15 @@ package ws
 import "time"
 
 const (
-	FrameTypeAck         = "ack"
-	FrameTypeNewMessage  = "new_message"
-	FrameTypeSendMessage = "send_message"
-	FrameTypeRead        = "read"
-	FrameTypeChatUpdated = "chat_updated"
-	FrameTypeUserUpdated = "user_updated"
-	FrameTypePresence    = "presence"
+	FrameTypeAck             = "ack"
+	FrameTypeNewMessage      = "new_message"
+	FrameTypeSendMessage     = "send_message"
+	FrameTypeRead            = "read"
+	FrameTypeChatUpdated     = "chat_updated"
+	FrameTypeUserUpdated     = "user_updated"
+	FrameTypePresence        = "presence"
+	FrameTypeMessageEdited   = "message_edited"
+	FrameTypeReactionUpdated = "reaction_updated"
 )
 
 type authFrame struct {
@@ -59,6 +61,27 @@ type presenceFrame struct {
 	UserID     int64   `json:"user_id"`
 	Status     string  `json:"status"`
 	LastSeenAt *string `json:"last_seen_at,omitempty"`
+}
+
+type messageEditedFrame struct {
+	Type      string `json:"type"`
+	ChatID    int64  `json:"chat_id"`
+	MessageID int64  `json:"message_id"`
+	Body      string `json:"body"`
+	EditedAt  string `json:"edited_at"`
+}
+
+type reactionCountsPayload struct {
+	Like    int `json:"like"`
+	Dislike int `json:"dislike"`
+	Heart   int `json:"heart"`
+}
+
+type reactionUpdatedFrame struct {
+	Type      string                `json:"type"`
+	ChatID    int64                 `json:"chat_id"`
+	MessageID int64                 `json:"message_id"`
+	Reactions reactionCountsPayload `json:"reactions"`
 }
 
 type messagePayload struct {

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { addChatMember, fetchChatMembers, removeChatMember } from '../api/members'
-import { ApiError } from '../api/errors'
+import { ApiError, toUserMessage } from '../api/errors'
 import { membersToUpserts, useUsers } from '../context/UsersContext'
 import type { ChatMember } from '../types/domain'
 
 function forbiddenMessage(err: unknown): string | null {
   if (err instanceof ApiError && err.status === 403) {
-    return err.message || 'Недостаточно прав'
+    return toUserMessage(err, 'Недостаточно прав')
   }
   return null
 }
@@ -43,7 +43,7 @@ export function useChatMembers(
       setMembers(next)
     } catch (err: unknown) {
       setMembers([])
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить участников')
+      setError(toUserMessage(err, 'Не удалось загрузить участников'))
     } finally {
       setLoading(false)
     }
@@ -72,8 +72,7 @@ export function useChatMembers(
         return true
       } catch (err: unknown) {
         setActionError(
-          forbiddenMessage(err) ??
-            (err instanceof Error ? err.message : 'Не удалось добавить участника'),
+          forbiddenMessage(err) ?? toUserMessage(err, 'Не удалось добавить участника'),
         )
         return false
       } finally {
@@ -98,8 +97,7 @@ export function useChatMembers(
         return true
       } catch (err: unknown) {
         setActionError(
-          forbiddenMessage(err) ??
-            (err instanceof Error ? err.message : 'Не удалось удалить участника'),
+          forbiddenMessage(err) ?? toUserMessage(err, 'Не удалось удалить участника'),
         )
         return false
       } finally {

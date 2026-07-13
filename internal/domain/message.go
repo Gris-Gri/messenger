@@ -9,4 +9,5 @@ type Message struct {
 	ClientMsgID string
 	Body        string
 	CreatedAt   time.Time
+	EditedAt    *time.Time
 }

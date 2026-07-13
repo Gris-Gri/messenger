@@ -14,8 +14,10 @@ import {
   type OutgoingMessage,
   type WsAckFrame,
   type WsChatUpdatedFrame,
+  type WsMessageEditedFrame,
   type WsNewMessageFrame,
   type WsPresenceFrame,
+  type WsReactionUpdatedFrame,
   type WsReadFrame,
   type WsStatus,
   type WsUserUpdatedFrame,
@@ -23,7 +25,7 @@ import {
 import { useActiveChat } from '../context/ActiveChatContext'
 import { useAuth } from '../context/AuthContext'
 import { useUsers } from '../context/UsersContext'
-import type { DisplayMessage } from '../types/domain'
+import type { DisplayMessage, ReactionCounts } from '../types/domain'
 import { createClientMsgId } from '../utils/clientMsgId'
 
 export type ChatMessageHandlers = {
@@ -31,6 +33,8 @@ export type ChatMessageHandlers = {
   addOptimisticMessage: (message: DisplayMessage) => void
   markAcked: (clientMsgId: string, serverId: number) => void
   addIncomingMessage: (message: DisplayMessage) => void
+  applyMessageEdited: (messageId: number, body: string, editedAt: string) => void
+  applyReactionUpdated: (messageId: number, counts: ReactionCounts) => void
 }
 
 type WebSocketContextValue = {
@@ -58,6 +62,11 @@ type WebSocketProviderProps = {
     createdAt: string,
     lastMessageId?: number,
   ) => boolean
+  patchLastMessageBodyIfMatch: (
+    chatId: number,
+    messageId: number,
+    body: string,
+  ) => void
   setChatTitle: (chatId: number, title: string) => void
   advanceMyReadCursor: (chatId: number, messageId: number) => void
   ensureChatFromMessage: (chatId: number) => Promise<void>
@@ -66,6 +75,7 @@ type WebSocketProviderProps = {
 export function WebSocketProvider({
   children,
   updateChatPreview,
+  patchLastMessageBodyIfMatch,
   setChatTitle,
   advanceMyReadCursor,
   ensureChatFromMessage,
@@ -81,6 +91,7 @@ export function WebSocketProvider({
   >(null)
   const activeChatIdRef = useRef(activeChatId)
   const updateChatPreviewRef = useRef(updateChatPreview)
+  const patchLastMessageBodyIfMatchRef = useRef(patchLastMessageBodyIfMatch)
   const setChatTitleRef = useRef(setChatTitle)
   const advanceMyReadCursorRef = useRef(advanceMyReadCursor)
   const ensureChatFromMessageRef = useRef(ensureChatFromMessage)
@@ -89,6 +100,7 @@ export function WebSocketProvider({
 
   activeChatIdRef.current = activeChatId
   updateChatPreviewRef.current = updateChatPreview
+  patchLastMessageBodyIfMatchRef.current = patchLastMessageBodyIfMatch
   setChatTitleRef.current = setChatTitle
   advanceMyReadCursorRef.current = advanceMyReadCursor
   ensureChatFromMessageRef.current = ensureChatFromMessage
@@ -197,6 +209,28 @@ export function WebSocketProvider({
           frame.status,
           frame.last_seen_at ?? null,
         )
+      },
+      onMessageEdited: (frame: WsMessageEditedFrame) => {
+        patchLastMessageBodyIfMatchRef.current(
+          frame.chat_id,
+          frame.message_id,
+          frame.body,
+        )
+
+        const handlers = chatHandlersRef.current
+        if (handlers && handlers.chatId === frame.chat_id) {
+          handlers.applyMessageEdited(
+            frame.message_id,
+            frame.body,
+            frame.edited_at,
+          )
+        }
+      },
+      onReactionUpdated: (frame: WsReactionUpdatedFrame) => {
+        const handlers = chatHandlersRef.current
+        if (handlers && handlers.chatId === frame.chat_id) {
+          handlers.applyReactionUpdated(frame.message_id, frame.reactions)
+        }
       },
     })
 

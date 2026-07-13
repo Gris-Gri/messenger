@@ -6,8 +6,20 @@ import {
   useState,
   type UIEventHandler,
 } from 'react'
-import { fetchMessages } from '../api/messages'
-import type { DisplayMessage, Message } from '../types/domain'
+import { toUserMessage } from '../api/errors'
+import { fetchMessages, setMessageReaction } from '../api/messages'
+import type {
+  DisplayMessage,
+  Message,
+  ReactionCounts,
+  ReactionSummary,
+  ReactionType,
+} from '../types/domain'
+import {
+  applyOptimisticReaction,
+  mergeReactionCounts,
+  normalizeReactions,
+} from '../utils/reactions'
 import type { ChatMessageHandlers } from './useWebSocket'
 
 const PAGE_SIZE = 50
@@ -20,6 +32,13 @@ type ScrollAdjust = {
 
 function messageKey(message: DisplayMessage): string {
   return message.client_msg_id ?? String(message.id)
+}
+
+function withNormalizedReactions(message: Message): DisplayMessage {
+  return {
+    ...message,
+    reactions: normalizeReactions(message.reactions),
+  }
 }
 
 export function useMessages(
@@ -85,9 +104,78 @@ export function useMessages(
         return prev
       }
       shouldScrollToBottom.current = true
-      return [...prev, message]
+      return [...prev, withNormalizedReactions(message)]
     })
   }, [])
+
+  const applyMessageEdited = useCallback(
+    (messageId: number, body: string, editedAt: string) => {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? { ...message, body, edited_at: editedAt }
+            : message,
+        ),
+      )
+    },
+    [],
+  )
+
+  const applyReactionUpdated = useCallback(
+    (messageId: number, counts: ReactionCounts) => {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                reactions: mergeReactionCounts(message.reactions, counts),
+              }
+            : message,
+        ),
+      )
+    },
+    [],
+  )
+
+  const applyReactionSummary = useCallback(
+    (messageId: number, summary: ReactionSummary) => {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? { ...message, reactions: normalizeReactions(summary) }
+            : message,
+        ),
+      )
+    },
+    [],
+  )
+
+  const toggleReaction = useCallback(
+    async (messageId: number, reaction: ReactionType) => {
+      if (chatId === null || messageId <= 0) {
+        return
+      }
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                reactions: applyOptimisticReaction(message.reactions, reaction),
+              }
+            : message,
+        ),
+      )
+
+      try {
+        const summary = await setMessageReaction(chatId, messageId, reaction)
+        applyReactionSummary(messageId, summary)
+      } catch {
+        // Keep optimistic state; WS / next history load will reconcile.
+      }
+    },
+    [applyReactionSummary, chatId],
+  )
 
   useEffect(() => {
     if (!registerChatHandlers || chatId === null) {
@@ -100,6 +188,8 @@ export function useMessages(
       addOptimisticMessage,
       markAcked,
       addIncomingMessage,
+      applyMessageEdited,
+      applyReactionUpdated,
     })
 
     return () => {
@@ -108,6 +198,8 @@ export function useMessages(
   }, [
     addIncomingMessage,
     addOptimisticMessage,
+    applyMessageEdited,
+    applyReactionUpdated,
     chatId,
     markAcked,
     registerChatHandlers,
@@ -140,7 +232,9 @@ export function useMessages(
           return
         }
 
-        const chronological: DisplayMessage[] = [...page].reverse()
+        const chronological: DisplayMessage[] = [...page]
+          .reverse()
+          .map(withNormalizedReactions)
         const pending = [...pendingByClientId.current.values()].filter(
           (message) => message.client_msg_id,
         )
@@ -165,7 +259,7 @@ export function useMessages(
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Не удалось загрузить сообщения')
+          setError(toUserMessage(err, 'Не удалось загрузить сообщения'))
         }
       })
       .finally(() => {
@@ -231,12 +325,12 @@ export function useMessages(
         return
       }
 
-      const older = [...page].reverse()
+      const older = [...page].reverse().map(withNormalizedReactions)
       setMessages((prev) => [...older, ...prev])
       setHasMore(page.length === PAGE_SIZE)
     } catch (err: unknown) {
       pendingScrollAdjust.current = null
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить сообщения')
+      setError(toUserMessage(err, 'Не удалось загрузить сообщения'))
     } finally {
       setLoadingMore(false)
     }
@@ -288,7 +382,7 @@ export function useMessages(
             return false
           }
 
-          const older = [...page].reverse()
+          const older = [...page].reverse().map(withNormalizedReactions)
           setMessages((prev) => {
             const next = [...older, ...prev]
             messagesRef.current = next
@@ -303,7 +397,7 @@ export function useMessages(
           }
         } catch (err: unknown) {
           pendingScrollAdjust.current = null
-          setError(err instanceof Error ? err.message : 'Не удалось загрузить сообщения')
+          setError(toUserMessage(err, 'Не удалось загрузить сообщения'))
           return false
         }
       }
@@ -359,5 +453,7 @@ export function useMessages(
     messageKey,
     scrollToMessage,
     highlightedMessageId,
+    applyMessageEdited,
+    toggleReaction,
   }
 }
