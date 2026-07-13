@@ -12,6 +12,8 @@ type RealtimeNotifier interface {
 	NotifyChatUpdated(ctx context.Context, chatID, actorUserID int64, title string)
 	NotifyUserUpdated(ctx context.Context, userID int64, login string)
 	NotifyPresence(ctx context.Context, userID int64, status string, lastSeenAt *time.Time)
+	NotifyMessageEdited(ctx context.Context, chatID, messageID int64, body string, editedAt time.Time)
+	NotifyReactionUpdated(ctx context.Context, chatID, messageID int64, counts ReactionCounts)
 }
 
 // PresenceChecker reports whether a user currently has an active WS connection.

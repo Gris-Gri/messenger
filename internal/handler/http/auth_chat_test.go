@@ -464,6 +464,167 @@ func TestSearchUsersShortQuery(t *testing.T) {
 	assertErrorCode(t, data, "validation_error")
 }
 
+func TestEditMessageHappyPath(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+
+	editedAt := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	currentBody := "old text"
+
+	env.members.getFn = func(_ context.Context, chatID, userID int64) (*domain.ChatMember, error) {
+		return &domain.ChatMember{ChatID: chatID, UserID: userID, Role: domain.RoleMember}, nil
+	}
+	env.messages.getByIDFn = func(_ context.Context, messageID int64) (*domain.Message, error) {
+		return &domain.Message{
+			ID:        messageID,
+			ChatID:    1,
+			SenderID:  1,
+			Body:      currentBody,
+			CreatedAt: time.Date(2026, 7, 13, 11, 0, 0, 0, time.UTC),
+		}, nil
+	}
+	env.messages.updateMessageBodyFn = func(_ context.Context, messageID, senderID int64, newBody string) (*domain.Message, error) {
+		currentBody = newBody
+		return &domain.Message{
+			ID:        messageID,
+			ChatID:    1,
+			SenderID:  senderID,
+			Body:      newBody,
+			CreatedAt: time.Date(2026, 7, 13, 11, 0, 0, 0, time.UTC),
+			EditedAt:  &editedAt,
+		}, nil
+	}
+	env.messages.listByChatFn = func(_ context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error) {
+		return []domain.Message{{
+			ID:        100,
+			ChatID:    chatID,
+			SenderID:  1,
+			Body:      currentBody,
+			CreatedAt: time.Date(2026, 7, 13, 11, 0, 0, 0, time.UTC),
+			EditedAt:  &editedAt,
+		}}, nil
+	}
+
+	token := env.accessToken(t, 1)
+	resp, data := env.do(http.MethodPatch, "/chats/1/messages/100", map[string]string{"body": "новый текст"}, token)
+	assertStatus(t, resp, http.StatusOK)
+
+	var patched struct {
+		ID       int64   `json:"id"`
+		Body     string  `json:"body"`
+		EditedAt *string `json:"edited_at"`
+	}
+	if err := json.Unmarshal(data, &patched); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if patched.ID != 100 || patched.Body != "новый текст" || patched.EditedAt == nil {
+		t.Fatalf("PATCH response = %+v", patched)
+	}
+
+	resp, data = env.do(http.MethodGet, "/chats/1/messages?limit=10", nil, token)
+	assertStatus(t, resp, http.StatusOK)
+
+	var history []struct {
+		ID       int64   `json:"id"`
+		Body     string  `json:"body"`
+		EditedAt *string `json:"edited_at"`
+	}
+	if err := json.Unmarshal(data, &history); err != nil {
+		t.Fatalf("unmarshal history: %v", err)
+	}
+	if len(history) != 1 || history[0].Body != "новый текст" || history[0].EditedAt == nil {
+		t.Fatalf("GET history = %+v, want edited body and edited_at", history)
+	}
+}
+
+func TestEditMessageForeignForbidden(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+
+	env.members.getFn = func(_ context.Context, chatID, userID int64) (*domain.ChatMember, error) {
+		return &domain.ChatMember{ChatID: chatID, UserID: userID, Role: domain.RoleAdmin}, nil
+	}
+	env.messages.getByIDFn = func(_ context.Context, messageID int64) (*domain.Message, error) {
+		return &domain.Message{ID: messageID, ChatID: 1, SenderID: 2, Body: "old"}, nil
+	}
+	env.messages.updateMessageBodyFn = func(context.Context, int64, int64, string) (*domain.Message, error) {
+		t.Fatal("UpdateMessageBody must not be called for foreign message")
+		return nil, nil
+	}
+
+	resp, data := env.do(http.MethodPatch, "/chats/1/messages/100", map[string]string{"body": "hack"}, env.accessToken(t, 1))
+	assertStatus(t, resp, http.StatusForbidden)
+	assertErrorCode(t, data, "forbidden")
+}
+
+func TestSetMessageReactionHappyPath(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+
+	like := domain.ReactionLike
+	env.members.getFn = func(_ context.Context, chatID, userID int64) (*domain.ChatMember, error) {
+		return &domain.ChatMember{ChatID: chatID, UserID: userID, Role: domain.RoleMember}, nil
+	}
+	env.messages.getByIDFn = func(_ context.Context, messageID int64) (*domain.Message, error) {
+		return &domain.Message{ID: messageID, ChatID: 1, SenderID: 2, Body: "hi"}, nil
+	}
+	env.messages.toggleReactionFn = func(_ context.Context, messageID, userID int64, reaction string) (domain.ReactionSummary, error) {
+		return domain.ReactionSummary{Like: 1, Dislike: 0, Heart: 0, MyReaction: &like}, nil
+	}
+	env.messages.listByChatFn = func(_ context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error) {
+		return []domain.Message{{ID: 100, ChatID: chatID, SenderID: 2, Body: "hi", CreatedAt: time.Now()}}, nil
+	}
+	env.messages.getReactionSummariesFn = func(_ context.Context, messageIDs []int64, viewerID int64) (map[int64]domain.ReactionSummary, error) {
+		return map[int64]domain.ReactionSummary{
+			100: {Like: 1, MyReaction: &like},
+		}, nil
+	}
+
+	token := env.accessToken(t, 1)
+	resp, data := env.do(http.MethodPost, "/chats/1/messages/100/reactions", map[string]string{"reaction": "like"}, token)
+	assertStatus(t, resp, http.StatusOK)
+
+	var body struct {
+		Like       int     `json:"like"`
+		MyReaction *string `json:"my_reaction"`
+	}
+	if err := json.Unmarshal(data, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Like != 1 || body.MyReaction == nil || *body.MyReaction != "like" {
+		t.Fatalf("POST reaction = %+v", body)
+	}
+
+	resp, data = env.do(http.MethodGet, "/chats/1/messages?limit=10", nil, token)
+	assertStatus(t, resp, http.StatusOK)
+
+	var history []struct {
+		ID        int64 `json:"id"`
+		Reactions struct {
+			Like       int     `json:"like"`
+			MyReaction *string `json:"my_reaction"`
+		} `json:"reactions"`
+	}
+	if err := json.Unmarshal(data, &history); err != nil {
+		t.Fatalf("unmarshal history: %v", err)
+	}
+	if len(history) != 1 || history[0].Reactions.Like != 1 || history[0].Reactions.MyReaction == nil {
+		t.Fatalf("GET history reactions = %+v", history)
+	}
+}
+
+func TestSetMessageReactionInvalid(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	env.members.getFn = func(_ context.Context, chatID, userID int64) (*domain.ChatMember, error) {
+		return &domain.ChatMember{ChatID: chatID, UserID: userID, Role: domain.RoleMember}, nil
+	}
+
+	resp, data := env.do(http.MethodPost, "/chats/1/messages/100/reactions", map[string]string{"reaction": "fire"}, env.accessToken(t, 1))
+	assertStatus(t, resp, http.StatusBadRequest)
+	assertErrorCode(t, data, "validation_error")
+}
+
 func passwordHash(raw string) (string, error) {
 	return password.Hash(raw)
 }

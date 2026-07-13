@@ -46,11 +46,25 @@ export type TokenPair = {
 
 export type DeliveryStatus = 'pending' | 'acked' | 'read'
 
+export type ReactionType = 'like' | 'dislike' | 'heart'
+
+export type ReactionCounts = {
+  like: number
+  dislike: number
+  heart: number
+}
+
+export type ReactionSummary = ReactionCounts & {
+  my_reaction: ReactionType | null
+}
+
 export type Message = {
   id: number
   sender_id: number
   body: string
   created_at: string
+  edited_at?: string | null
+  reactions?: ReactionSummary
 }
 
 /** Сообщение в ленте: серверное или оптимистичное (с client_msg_id до ack). */

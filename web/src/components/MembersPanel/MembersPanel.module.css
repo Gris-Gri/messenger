@@ -128,7 +128,7 @@
   font-family: var(--font-heading);
   font-size: var(--btn-font-size);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-on-accent);
   background: var(--accent);
   border: none;
   border-radius: var(--radius-sm);

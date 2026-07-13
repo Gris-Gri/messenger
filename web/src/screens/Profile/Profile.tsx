@@ -1,10 +1,12 @@
+import { Moon, Sun } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import * as profileApi from '../../api/profile'
-import { ApiError } from '../../api/errors'
+import { ApiError, toUserMessage } from '../../api/errors'
 import { useAuth } from '../../context/AuthContext'
 import { useUsers } from '../../context/UsersContext'
 import type { MeUser } from '../../types/domain'
 import { formatRegistrationDate } from '../../utils/formatRegistrationDate'
+import { getAppliedTheme, toggleTheme, type Theme } from '../../utils/theme'
 import { Avatar } from '../../components/Avatar/Avatar'
 import styles from './Profile.module.css'
 
@@ -34,6 +36,7 @@ export function Profile({ onBack }: ProfileProps) {
   }>({})
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [theme, setTheme] = useState<Theme>(() => getAppliedTheme())
 
   useEffect(() => {
     let cancelled = false
@@ -51,7 +54,7 @@ export function Profile({ onBack }: ProfileProps) {
         updateStoredLogin(data.id, data.login)
       } catch (err: unknown) {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить профиль')
+          setLoadError(toUserMessage(err, 'Не удалось загрузить профиль'))
         }
       } finally {
         if (!cancelled) {
@@ -103,7 +106,7 @@ export function Profile({ onBack }: ProfileProps) {
       if (err instanceof ApiError && err.code === 'conflict') {
         setLoginError('логин занят')
       } else {
-        setLoginError(err instanceof Error ? err.message : 'Не удалось сохранить логин')
+        setLoginError(toUserMessage(err, 'Не удалось сохранить логин'))
       }
     } finally {
       setLoginSaving(false)
@@ -144,7 +147,7 @@ export function Profile({ onBack }: ProfileProps) {
         setPasswordErrors({ current: 'Неверный текущий пароль' })
       } else {
         setPasswordErrors({
-          current: err instanceof Error ? err.message : 'Не удалось сменить пароль',
+          current: toUserMessage(err, 'Не удалось сменить пароль'),
         })
       }
     } finally {
@@ -154,6 +157,10 @@ export function Profile({ onBack }: ProfileProps) {
 
   const handleLogout = () => {
     logout()
+  }
+
+  const handleThemeToggle = () => {
+    setTheme(toggleTheme())
   }
 
   return (
@@ -294,6 +301,25 @@ export function Profile({ onBack }: ProfileProps) {
                 {passwordSaving ? 'Сохранение…' : 'Сменить пароль'}
               </button>
             </form>
+
+            <div className={styles.themeRow}>
+              <span className={styles.themeLabel}>Тема</span>
+              <button
+                type="button"
+                className={styles.themeToggle}
+                onClick={handleThemeToggle}
+                aria-label={
+                  theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'
+                }
+                title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+              >
+                {theme === 'dark' ? (
+                  <Sun size={18} strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <Moon size={18} strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+            </div>
 
             <button type="button" className={styles.logoutBtn} onClick={handleLogout}>
               Выйти

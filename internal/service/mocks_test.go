@@ -94,13 +94,31 @@ func (m *mockChatRepo) ListByUser(ctx context.Context, userID int64) ([]domain.C
 }
 
 type mockMessageRepo struct {
-	createFn     func(ctx context.Context, msg *domain.Message) (*domain.Message, error)
-	listByChatFn func(ctx context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error)
-	searchFn     func(ctx context.Context, chatID int64, query string) ([]domain.Message, error)
+	createFn               func(ctx context.Context, msg *domain.Message) (*domain.Message, error)
+	getByIDFn              func(ctx context.Context, messageID int64) (*domain.Message, error)
+	updateMessageBodyFn    func(ctx context.Context, messageID, senderID int64, newBody string) (*domain.Message, error)
+	listByChatFn           func(ctx context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error)
+	searchFn               func(ctx context.Context, chatID int64, query string) ([]domain.Message, error)
+	toggleReactionFn       func(ctx context.Context, messageID, userID int64, reaction string) (domain.ReactionSummary, error)
+	getReactionSummariesFn func(ctx context.Context, messageIDs []int64, viewerID int64) (map[int64]domain.ReactionSummary, error)
 }
 
 func (m *mockMessageRepo) Create(ctx context.Context, msg *domain.Message) (*domain.Message, error) {
 	return m.createFn(ctx, msg)
+}
+
+func (m *mockMessageRepo) GetByID(ctx context.Context, messageID int64) (*domain.Message, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, messageID)
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockMessageRepo) UpdateMessageBody(ctx context.Context, messageID, senderID int64, newBody string) (*domain.Message, error) {
+	if m.updateMessageBodyFn != nil {
+		return m.updateMessageBodyFn(ctx, messageID, senderID, newBody)
+	}
+	return nil, domain.ErrNotFound
 }
 
 func (m *mockMessageRepo) ListByChat(ctx context.Context, chatID, beforeID int64, limit int) ([]domain.Message, error) {
@@ -109,6 +127,20 @@ func (m *mockMessageRepo) ListByChat(ctx context.Context, chatID, beforeID int64
 
 func (m *mockMessageRepo) Search(ctx context.Context, chatID int64, query string) ([]domain.Message, error) {
 	return m.searchFn(ctx, chatID, query)
+}
+
+func (m *mockMessageRepo) ToggleReaction(ctx context.Context, messageID, userID int64, reaction string) (domain.ReactionSummary, error) {
+	if m.toggleReactionFn != nil {
+		return m.toggleReactionFn(ctx, messageID, userID, reaction)
+	}
+	return domain.ReactionSummary{}, nil
+}
+
+func (m *mockMessageRepo) GetReactionSummaries(ctx context.Context, messageIDs []int64, viewerID int64) (map[int64]domain.ReactionSummary, error) {
+	if m.getReactionSummariesFn != nil {
+		return m.getReactionSummariesFn(ctx, messageIDs, viewerID)
+	}
+	return map[int64]domain.ReactionSummary{}, nil
 }
 
 type mockMemberRepo struct {
@@ -181,14 +213,18 @@ func (m *mockReadStateRepo) IsReadByAll(ctx context.Context, chatID, messageID, 
 }
 
 type mockRealtimeNotifier struct {
-	notifyReadFn        func(ctx context.Context, chatID, userID, lastReadMessageID int64)
-	notifyChatUpdatedFn func(ctx context.Context, chatID, actorUserID int64, title string)
-	notifyUserUpdatedFn func(ctx context.Context, userID int64, login string)
-	notifyPresenceFn    func(ctx context.Context, userID int64, status string, lastSeenAt *time.Time)
-	calls               []notifyReadCall
-	chatUpdatedCalls    []notifyChatUpdatedCall
-	userUpdatedCalls    []notifyUserUpdatedCall
-	presenceCalls       []notifyPresenceCall
+	notifyReadFn            func(ctx context.Context, chatID, userID, lastReadMessageID int64)
+	notifyChatUpdatedFn     func(ctx context.Context, chatID, actorUserID int64, title string)
+	notifyUserUpdatedFn     func(ctx context.Context, userID int64, login string)
+	notifyPresenceFn        func(ctx context.Context, userID int64, status string, lastSeenAt *time.Time)
+	notifyMessageEditedFn   func(ctx context.Context, chatID, messageID int64, body string, editedAt time.Time)
+	notifyReactionUpdatedFn func(ctx context.Context, chatID, messageID int64, counts domain.ReactionCounts)
+	calls                   []notifyReadCall
+	chatUpdatedCalls        []notifyChatUpdatedCall
+	userUpdatedCalls        []notifyUserUpdatedCall
+	presenceCalls           []notifyPresenceCall
+	messageEditedCalls      []notifyMessageEditedCall
+	reactionUpdatedCalls    []notifyReactionUpdatedCall
 }
 
 type notifyReadCall struct {
@@ -212,6 +248,19 @@ type notifyPresenceCall struct {
 	userID     int64
 	status     string
 	lastSeenAt *time.Time
+}
+
+type notifyMessageEditedCall struct {
+	chatID    int64
+	messageID int64
+	body      string
+	editedAt  time.Time
+}
+
+type notifyReactionUpdatedCall struct {
+	chatID    int64
+	messageID int64
+	counts    domain.ReactionCounts
 }
 
 func (m *mockRealtimeNotifier) NotifyRead(ctx context.Context, chatID, userID, lastReadMessageID int64) {
@@ -254,5 +303,28 @@ func (m *mockRealtimeNotifier) NotifyPresence(ctx context.Context, userID int64,
 	})
 	if m.notifyPresenceFn != nil {
 		m.notifyPresenceFn(ctx, userID, status, lastSeenAt)
+	}
+}
+
+func (m *mockRealtimeNotifier) NotifyMessageEdited(ctx context.Context, chatID, messageID int64, body string, editedAt time.Time) {
+	m.messageEditedCalls = append(m.messageEditedCalls, notifyMessageEditedCall{
+		chatID:    chatID,
+		messageID: messageID,
+		body:      body,
+		editedAt:  editedAt,
+	})
+	if m.notifyMessageEditedFn != nil {
+		m.notifyMessageEditedFn(ctx, chatID, messageID, body, editedAt)
+	}
+}
+
+func (m *mockRealtimeNotifier) NotifyReactionUpdated(ctx context.Context, chatID, messageID int64, counts domain.ReactionCounts) {
+	m.reactionUpdatedCalls = append(m.reactionUpdatedCalls, notifyReactionUpdatedCall{
+		chatID:    chatID,
+		messageID: messageID,
+		counts:    counts,
+	})
+	if m.notifyReactionUpdatedFn != nil {
+		m.notifyReactionUpdatedFn(ctx, chatID, messageID, counts)
 	}
 }

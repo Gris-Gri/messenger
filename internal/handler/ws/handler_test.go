@@ -73,11 +73,23 @@ func (m *mockMessageRepo) Create(ctx context.Context, msg *domain.Message) (*dom
 	}
 	return nil, nil
 }
+func (m *mockMessageRepo) GetByID(context.Context, int64) (*domain.Message, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockMessageRepo) UpdateMessageBody(context.Context, int64, int64, string) (*domain.Message, error) {
+	return nil, domain.ErrNotFound
+}
 func (m *mockMessageRepo) ListByChat(context.Context, int64, int64, int) ([]domain.Message, error) {
 	return nil, nil
 }
 func (m *mockMessageRepo) Search(context.Context, int64, string) ([]domain.Message, error) {
 	return nil, nil
+}
+func (m *mockMessageRepo) ToggleReaction(context.Context, int64, int64, string) (domain.ReactionSummary, error) {
+	return domain.ReactionSummary{}, nil
+}
+func (m *mockMessageRepo) GetReactionSummaries(context.Context, []int64, int64) (map[int64]domain.ReactionSummary, error) {
+	return map[int64]domain.ReactionSummary{}, nil
 }
 
 func (m *mockMemberRepo) Add(context.Context, *domain.ChatMember) error { return nil }

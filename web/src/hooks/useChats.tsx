@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { fetchChats } from '../api/chats'
+import { toUserMessage } from '../api/errors'
 import { fetchChatMembers } from '../api/members'
 import { useAuth } from '../context/AuthContext'
 import { membersToUpserts, useUsers } from '../context/UsersContext'
@@ -32,6 +33,12 @@ type ChatsContextValue = {
     createdAt: string,
     lastMessageId?: number,
   ) => boolean
+  /** Если messageId — последнее в чате, обновляет last_message_body (после edit). */
+  patchLastMessageBodyIfMatch: (
+    chatId: number,
+    messageId: number,
+    body: string,
+  ) => void
   /** Локально обновляет title группового чата (PATCH / WS chat_updated). */
   setChatTitle: (chatId: number, title: string) => void
   /** Поднимает my_last_read_message_id (GREATEST), чтобы снять unread в сайдбаре. */
@@ -161,7 +168,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
           setChats(items)
           await applyPeers(items, currentUser.id)
         } catch (err: unknown) {
-          setError(err instanceof Error ? err.message : 'Не удалось загрузить чаты')
+          setError(toUserMessage(err, 'Не удалось загрузить чаты'))
         } finally {
           if (!silent) {
             setLoading(false)
@@ -204,7 +211,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Не удалось загрузить чаты')
+          setError(toUserMessage(err, 'Не удалось загрузить чаты'))
         }
       } finally {
         if (!cancelled) {
@@ -251,6 +258,20 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         ),
       )
       return true
+    },
+    [],
+  )
+
+  const patchLastMessageBodyIfMatch = useCallback(
+    (chatId: number, messageId: number, body: string) => {
+      setChats((prev) =>
+        prev.map((chat) => {
+          if (chat.id !== chatId || chat.last_message_id !== messageId) {
+            return chat
+          }
+          return { ...chat, last_message_body: body }
+        }),
+      )
     },
     [],
   )
@@ -322,6 +343,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       updateChatPreview,
+      patchLastMessageBodyIfMatch,
       setChatTitle,
       advanceMyReadCursor,
       upsertCreatedChat,
@@ -334,6 +356,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       error,
       ensureChatFromMessage,
       loading,
+      patchLastMessageBodyIfMatch,
       peerUserIds,
       reloadChats,
       setChatTitle,

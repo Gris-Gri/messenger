@@ -1,7 +1,7 @@
 import { Pencil, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { updateChatTitle } from '../../api/chats'
-import { ApiError } from '../../api/errors'
+import { ApiError, toUserMessage } from '../../api/errors'
 import { useAuth } from '../../context/AuthContext'
 import { useUsers } from '../../context/UsersContext'
 import { useChatMembers } from '../../hooks/useChatMembers'
@@ -23,11 +23,10 @@ function titleErrorMessage(err: unknown): string {
       return 'Название не может быть пустым'
     }
     if (err.status === 403) {
-      return err.message || 'Недостаточно прав для смены названия'
+      return toUserMessage(err, 'Недостаточно прав для смены названия')
     }
-    return err.message
   }
-  return err instanceof Error ? err.message : 'Не удалось сменить название'
+  return toUserMessage(err, 'Не удалось сменить название')
 }
 
 export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
@@ -278,7 +277,7 @@ export function MembersPanel({ chatId, open, onClose }: MembersPanelProps) {
                 {!isSelf && online && (
                   <span className={styles.presenceOnline}>
                     <span className={styles.presenceDot} aria-hidden="true" />
-                    online
+                    в сети
                   </span>
                 )}
                 {!isSelf && !online && lastSeenLabel && (

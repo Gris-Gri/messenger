@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toUserMessage } from '../../api/errors'
 import { searchUsers } from '../../api/users'
 import type { User } from '../../types/domain'
 import styles from './UserSearch.module.css'
@@ -61,7 +62,7 @@ export function UserSearch({
         .catch((err: unknown) => {
           if (!cancelled) {
             setResults([])
-            setError(err instanceof Error ? err.message : 'Ошибка поиска')
+            setError(toUserMessage(err, 'Ошибка поиска'))
           }
         })
         .finally(() => {

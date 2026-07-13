@@ -204,7 +204,7 @@ export function Sidebar({ onOpenProfile }: SidebarProps) {
               className={`${styles.statusDot} ${isOnline ? styles.statusDotOnline : styles.statusDotReconnecting}`}
               aria-hidden="true"
             />
-            <span>{isOnline ? 'online' : 'reconnecting'}</span>
+            <span>{isOnline ? 'в сети' : 'переподключение…'}</span>
           </div>
         </div>
       </footer>

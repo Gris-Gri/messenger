@@ -29,8 +29,16 @@ type ChatRepository interface {
 
 type MessageRepository interface {
 	Create(ctx context.Context, msg *Message) (*Message, error)
+	GetByID(ctx context.Context, messageID int64) (*Message, error)
+	UpdateMessageBody(ctx context.Context, messageID, senderID int64, newBody string) (*Message, error)
 	ListByChat(ctx context.Context, chatID, beforeID int64, limit int) ([]Message, error)
 	Search(ctx context.Context, chatID int64, query string) ([]Message, error)
+	// ToggleReaction inserts, replaces, or removes the user's reaction (same reaction = toggle off).
+	// Returns the updated summary for that viewer.
+	ToggleReaction(ctx context.Context, messageID, userID int64, reaction string) (ReactionSummary, error)
+	// GetReactionSummaries returns aggregates for the given message IDs in one GROUP BY query.
+	// Missing IDs are omitted from the map (caller treats them as zero counts / no my_reaction).
+	GetReactionSummaries(ctx context.Context, messageIDs []int64, viewerID int64) (map[int64]ReactionSummary, error)
 }
 
 type MemberRepository interface {

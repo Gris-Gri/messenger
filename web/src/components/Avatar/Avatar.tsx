@@ -39,7 +39,7 @@ export function Avatar({ userId, login, size = 'md', className }: AvatarProps) {
       className={`${styles.avatar} ${sizeClass} ${className ?? ''}`.trim()}
       style={{
         backgroundColor: `hsl(${hue} 52% 38%)`,
-        color: 'var(--text-primary)',
+        color: 'var(--text-on-accent)',
       }}
       aria-hidden="true"
       title={login}

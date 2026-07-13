@@ -24,13 +24,14 @@ function BackgroundBlobs() {
 }
 
 function MessengerLayout({ onOpenProfile }: { onOpenProfile: () => void }) {
-  const { updateChatPreview, advanceMyReadCursor, ensureChatFromMessage, setChatTitle } =
+  const { updateChatPreview, patchLastMessageBodyIfMatch, advanceMyReadCursor, ensureChatFromMessage, setChatTitle } =
     useChats()
   const { isNarrow, sidebarOpen, closeSidebar } = useSidebar()
 
   return (
     <WebSocketProvider
       updateChatPreview={updateChatPreview}
+      patchLastMessageBodyIfMatch={patchLastMessageBodyIfMatch}
       setChatTitle={setChatTitle}
       advanceMyReadCursor={advanceMyReadCursor}
       ensureChatFromMessage={ensureChatFromMessage}

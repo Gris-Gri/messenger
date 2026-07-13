@@ -1,6 +1,16 @@
-import { Info, Menu, Search, Send } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Info, Menu, Pencil, Search, Send } from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type TouchEvent,
+} from 'react'
 import { getChatDisplayName } from '../../api/chats'
+import { toUserMessage } from '../../api/errors'
+import { editMessage } from '../../api/messages'
 import { useActiveChat } from '../../context/ActiveChatContext'
 import { useAuth } from '../../context/AuthContext'
 import { useSidebar } from '../../context/SidebarContext'
@@ -10,17 +20,24 @@ import { useMemberNames } from '../../hooks/useMemberNames'
 import { useMessages } from '../../hooks/useMessages'
 import { useReadState } from '../../hooks/useReadState'
 import { useWebSocket } from '../../hooks/useWebSocket'
-import { MembersPanel } from '../MembersPanel/MembersPanel'
-import { SearchPanel } from '../SearchPanel/SearchPanel'
+import type { DisplayMessage, ReactionType } from '../../types/domain'
+import { resolveOwnDeliveryStatus } from '../../utils/deliveryStatus'
+import { formatMessageTime } from '../../utils/formatMessageTime'
+import {
+  hasAnyReaction,
+  normalizeReactions,
+  REACTION_EMOJI,
+  REACTION_TYPES,
+} from '../../utils/reactions'
 import { Avatar } from '../Avatar/Avatar'
 import { EmptyState } from '../EmptyState/EmptyState'
+import { MembersPanel } from '../MembersPanel/MembersPanel'
 import {
   MessageStatus,
   toMessageStatusKind,
 } from '../MessageStatus/MessageStatus'
+import { SearchPanel } from '../SearchPanel/SearchPanel'
 import { MessageListSkeletonItems } from '../Skeleton/Skeleton'
-import { resolveOwnDeliveryStatus } from '../../utils/deliveryStatus'
-import { formatMessageTime } from '../../utils/formatMessageTime'
 import styles from './ChatWindow.module.css'
 
 type ChatWindowProps = {
@@ -29,6 +46,8 @@ type ChatWindowProps = {
   chatType: 'direct' | 'group' | null
   avatarUserId: number | null
 }
+
+const LONG_PRESS_MS = 480
 
 function resolveSenderName(
   senderId: number,
@@ -49,12 +68,17 @@ function resizeTextarea(element: HTMLTextAreaElement): void {
   element.style.height = `${Math.min(element.scrollHeight, 120)}px`
 }
 
+function resizeEditTextarea(element: HTMLTextAreaElement): void {
+  element.style.height = 'auto'
+  element.style.height = `${Math.min(element.scrollHeight, 160)}px`
+}
+
 export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWindowProps) {
   const { currentUser } = useAuth()
   const { users, getLogin } = useUsers()
   const { membersPanelRequest } = useActiveChat()
   const { isNarrow, toggleSidebar } = useSidebar()
-  const { advanceMyReadCursor } = useChats()
+  const { advanceMyReadCursor, patchLastMessageBodyIfMatch } = useChats()
   const { sendMessage, registerChatHandlers, registerReadHandler } = useWebSocket()
   const {
     messages,
@@ -66,6 +90,8 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
     messageKey,
     scrollToMessage,
     highlightedMessageId,
+    applyMessageEdited,
+    toggleReaction,
   } = useMessages(chatId, registerChatHandlers)
   const { readCursors } = useReadState({
     chatId,
@@ -79,8 +105,15 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
   const [draft, setDraft] = useState('')
   const [membersOpen, setMembersOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [actionsVisibleId, setActionsVisibleId] = useState<number | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null)
   const lastMembersRequestRef = useRef(0)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const headerTitle = chatTitle ?? 'Выберите чат'
   const headerLogin =
@@ -88,9 +121,14 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
       ? users[avatarUserId]?.login || chatTitle || ''
       : chatTitle || ''
   const canSend = chatId !== null && draft.trim().length > 0
+  const canSaveEdit = editDraft.trim().length > 0 && !editSaving
 
   useEffect(() => {
     setSearchOpen(false)
+    setEditingMessageId(null)
+    setEditDraft('')
+    setEditError(null)
+    setActionsVisibleId(null)
     if (membersPanelRequest > lastMembersRequestRef.current) {
       lastMembersRequestRef.current = membersPanelRequest
       setMembersOpen(true)
@@ -105,6 +143,32 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
       resizeTextarea(textarea)
     }
   }, [draft, chatId])
+
+  useEffect(() => {
+    if (editingMessageId === null) {
+      return
+    }
+    const textarea = editTextareaRef.current
+    if (!textarea) {
+      return
+    }
+    resizeEditTextarea(textarea)
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+  }, [editingMessageId])
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer()
+    }
+  }, [clearLongPressTimer])
 
   const openMembers = useCallback(() => {
     setSearchOpen(false)
@@ -139,6 +203,102 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
       }
     },
     [handleSend],
+  )
+
+  const startEdit = useCallback((message: DisplayMessage) => {
+    if (message.id <= 0) {
+      return
+    }
+    setEditingMessageId(message.id)
+    setEditDraft(message.body)
+    setEditError(null)
+    setActionsVisibleId(null)
+  }, [])
+
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null)
+    setEditDraft('')
+    setEditError(null)
+    setEditSaving(false)
+  }, [])
+
+  const saveEdit = useCallback(async () => {
+    if (chatId === null || editingMessageId === null) {
+      return
+    }
+    const trimmed = editDraft.trim()
+    if (!trimmed || editSaving) {
+      return
+    }
+
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      const updated = await editMessage(chatId, editingMessageId, trimmed)
+      applyMessageEdited(
+        updated.id,
+        updated.body,
+        updated.edited_at ?? new Date().toISOString(),
+      )
+      patchLastMessageBodyIfMatch(chatId, updated.id, updated.body)
+      setEditingMessageId(null)
+      setEditDraft('')
+    } catch (err: unknown) {
+      setEditError(toUserMessage(err, 'Не удалось сохранить сообщение'))
+    } finally {
+      setEditSaving(false)
+    }
+  }, [
+    applyMessageEdited,
+    chatId,
+    editDraft,
+    editSaving,
+    editingMessageId,
+    patchLastMessageBodyIfMatch,
+  ])
+
+  const handleEditKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        cancelEdit()
+        return
+      }
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        void saveEdit()
+      }
+    },
+    [cancelEdit, saveEdit],
+  )
+
+  const handleReactionClick = useCallback(
+    (messageId: number, reaction: ReactionType) => {
+      void toggleReaction(messageId, reaction)
+    },
+    [toggleReaction],
+  )
+
+  const handleMessageTouchStart = useCallback(
+    (messageId: number) => {
+      clearLongPressTimer()
+      longPressTimerRef.current = setTimeout(() => {
+        setActionsVisibleId(messageId)
+        longPressTimerRef.current = null
+      }, LONG_PRESS_MS)
+    },
+    [clearLongPressTimer],
+  )
+
+  const handleMessageTouchEnd = useCallback(() => {
+    clearLongPressTimer()
+  }, [clearLongPressTimer])
+
+  const handleMessageTouchMove = useCallback(
+    (_event: TouchEvent<HTMLLIElement>) => {
+      clearLongPressTimer()
+    },
+    [clearLongPressTimer],
   )
 
   return (
@@ -216,6 +376,11 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
                 ref={listRef}
                 className={styles.messageList}
                 onScroll={handleScroll}
+                onClick={() => {
+                  if (actionsVisibleId !== null && editingMessageId === null) {
+                    setActionsVisibleId(null)
+                  }
+                }}
               >
                 {loadingMore && (
                   <li className={styles.loadMoreHint}>Загрузка…</li>
@@ -247,12 +412,28 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
                       : null
                   const showDelivery = isOwn && (msg.delivery_status != null || msg.id > 0)
                   const isHighlighted = msg.id > 0 && msg.id === highlightedMessageId
+                  const isEditing = isOwn && editingMessageId === msg.id
+                  const canEdit = isOwn && msg.id > 0 && !isEditing
+                  const isEdited = Boolean(msg.edited_at)
+                  const canReact = msg.id > 0 && !isEditing
+                  const reactions = normalizeReactions(msg.reactions)
+                  const showReactions = hasAnyReaction(reactions)
 
                   return (
                     <li
                       key={messageKey(msg)}
                       data-message-id={msg.id > 0 ? msg.id : undefined}
-                      className={`${styles.bubbleWrap} ${isOwn ? styles.bubbleWrapOwn : styles.bubbleWrapOther} ${isHighlighted ? styles.bubbleWrapHighlight : ''}`}
+                      className={`${styles.bubbleWrap} ${isOwn ? styles.bubbleWrapOwn : styles.bubbleWrapOther} ${isHighlighted ? styles.bubbleWrapHighlight : ''} ${actionsVisibleId === msg.id ? styles.actionsVisible : ''}`}
+                      onTouchStart={
+                        canReact
+                          ? () => {
+                              handleMessageTouchStart(msg.id)
+                            }
+                          : undefined
+                      }
+                      onTouchEnd={canReact ? handleMessageTouchEnd : undefined}
+                      onTouchMove={canReact ? handleMessageTouchMove : undefined}
+                      onTouchCancel={canReact ? handleMessageTouchEnd : undefined}
                     >
                       {!isOwn && (
                         <div className={styles.avatarSlot}>
@@ -267,18 +448,138 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
                         {senderName && (
                           <span className={styles.senderName}>{senderName}</span>
                         )}
-                        <div
-                          className={`${styles.bubble} ${isOwn ? styles.bubbleOwn : styles.bubbleOther}`}
-                        >
-                          {msg.body}
-                        </div>
-                        <div className={styles.meta}>
-                          <span className={styles.timestamp}>
-                            {formatMessageTime(msg.created_at)}
-                          </span>
-                          {showDelivery && deliveryStatus && (
-                            <MessageStatus status={toMessageStatusKind(deliveryStatus)} />
+                        <div className={styles.bubbleRow}>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className={styles.editBtn}
+                              aria-label="Редактировать"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                startEdit(msg)
+                              }}
+                            >
+                              <Pencil size={14} strokeWidth={1.75} aria-hidden />
+                            </button>
                           )}
+                          {canReact && (
+                            <div
+                              className={styles.reactionPicker}
+                              role="group"
+                              aria-label="Реакции"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {REACTION_TYPES.map((reaction) => (
+                                <button
+                                  key={reaction}
+                                  type="button"
+                                  className={`${styles.reactionPickerBtn} ${
+                                    reactions.my_reaction === reaction
+                                      ? styles.reactionPickerBtnActive
+                                      : ''
+                                  }`}
+                                  aria-label={reaction}
+                                  aria-pressed={reactions.my_reaction === reaction}
+                                  onClick={() => handleReactionClick(msg.id, reaction)}
+                                >
+                                  {REACTION_EMOJI[reaction]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {isEditing ? (
+                            <div
+                              className={`${styles.bubble} ${styles.bubbleOwn} ${styles.bubbleEditing}`}
+                            >
+                              <textarea
+                                ref={editTextareaRef}
+                                className={styles.editTextarea}
+                                rows={1}
+                                value={editDraft}
+                                disabled={editSaving}
+                                onChange={(e) => {
+                                  setEditDraft(e.target.value)
+                                  resizeEditTextarea(e.currentTarget)
+                                }}
+                                onKeyDown={handleEditKeyDown}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className={styles.editActions}>
+                                <button
+                                  type="button"
+                                  className={styles.editCancelBtn}
+                                  disabled={editSaving}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    cancelEdit()
+                                  }}
+                                >
+                                  Отмена
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.editSaveBtn}
+                                  disabled={!canSaveEdit}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    void saveEdit()
+                                  }}
+                                >
+                                  Сохранить
+                                </button>
+                              </div>
+                              {editError && (
+                                <p className={styles.editError}>{editError}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <div
+                              className={`${styles.bubble} ${isOwn ? styles.bubbleOwn : styles.bubbleOther}`}
+                            >
+                              <span className={styles.bubbleBody}>{msg.body}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className={styles.messageFooter}>
+                          {showReactions && (
+                            <div
+                              className={styles.reactionRow}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {REACTION_TYPES.filter(
+                                (reaction) => reactions[reaction] > 0,
+                              ).map((reaction) => (
+                                <button
+                                  key={reaction}
+                                  type="button"
+                                  className={`${styles.reactionChip} ${
+                                    reactions.my_reaction === reaction
+                                      ? styles.reactionChipMine
+                                      : ''
+                                  }`}
+                                  aria-label={`${REACTION_EMOJI[reaction]} ${reactions[reaction]}`}
+                                  aria-pressed={reactions.my_reaction === reaction}
+                                  onClick={() => handleReactionClick(msg.id, reaction)}
+                                >
+                                  <span aria-hidden>{REACTION_EMOJI[reaction]}</span>
+                                  <span className={styles.reactionCount}>
+                                    {reactions[reaction]}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <div className={styles.meta}>
+                            {isEdited && (
+                              <span className={styles.editedMark}>ред.</span>
+                            )}
+                            <span className={styles.timestamp}>
+                              {formatMessageTime(msg.created_at)}
+                            </span>
+                            {showDelivery && deliveryStatus && (
+                              <MessageStatus status={toMessageStatusKind(deliveryStatus)} />
+                            )}
+                          </div>
                         </div>
                       </div>
                     </li>
