@@ -34,13 +34,14 @@ function resolveSenderName(
   senderId: number,
   chatType: 'direct' | 'group' | null,
   currentUserId: number | null,
-  memberNames: Record<number, string>,
+  getLogin: (userId: number, fallback?: string) => string,
 ): string | undefined {
   if (chatType !== 'group' || currentUserId === senderId) {
     return undefined
   }
 
-  return memberNames[senderId]
+  const login = getLogin(senderId).trim()
+  return login || undefined
 }
 
 function resizeTextarea(element: HTMLTextAreaElement): void {
@@ -50,7 +51,7 @@ function resizeTextarea(element: HTMLTextAreaElement): void {
 
 export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWindowProps) {
   const { currentUser } = useAuth()
-  const { users } = useUsers()
+  const { users, getLogin } = useUsers()
   const { membersPanelRequest } = useActiveChat()
   const { isNarrow, toggleSidebar } = useSidebar()
   const { advanceMyReadCursor } = useChats()
@@ -233,11 +234,11 @@ export function ChatWindow({ chatId, chatTitle, chatType, avatarUserId }: ChatWi
                         msg.sender_id,
                         chatType,
                         currentUser?.id ?? null,
-                        memberNames,
+                        getLogin,
                       )
                     : undefined
                   const senderLogin =
-                    users[msg.sender_id]?.login ||
+                    getLogin(msg.sender_id) ||
                     memberNames[msg.sender_id] ||
                     `#${msg.sender_id}`
                   const deliveryStatus =
